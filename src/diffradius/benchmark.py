@@ -9,7 +9,6 @@ import tempfile
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from .models import RiskCategory
 from .repository import RepositoryView

@@ -8,6 +8,7 @@ from pathlib import Path
 from agents import RunConfig, Runner, set_tracing_disabled
 
 from .agents import adversary_agent, baseline_agent, impact_scout_agent, verifier_agent
+from .config import settings
 from .models import AdversarialReview, ImpactMap, ReviewReport, RunUsage, WorkflowResult
 from .repository import RepositoryView
 from .tools import ReviewContext
@@ -36,7 +37,7 @@ def _run_agent(agent, prompt: str, context: ReviewContext):
         agent,
         prompt,
         context=context,
-        max_turns=12,
+        max_turns=settings().max_turns,
         run_config=RunConfig(tracing_disabled=True, trace_include_sensitive_data=False),
     )
     elapsed = time.perf_counter() - started
