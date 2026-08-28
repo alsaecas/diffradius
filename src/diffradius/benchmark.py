@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import difflib
+import hashlib
 import importlib.util
+import json
 import inspect
 import runpy
 import sys
@@ -9,7 +11,6 @@ import tempfile
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-
 from .models import RiskCategory
 from .repository import RepositoryView
 from .scoring import ExpectedRisk
@@ -50,6 +51,29 @@ def all_cases():
     return _load_cases_module().CASES
 
 
+
+
+def benchmark_fingerprint() -> str:
+    serializable = []
+    for case in all_cases():
+        serializable.append(
+            {
+                "id": case.id,
+                "title": case.title,
+                "ticket": case.ticket,
+                "before": case.before,
+                "after": case.after,
+                "oracle": case.oracle,
+                "expected": [
+                    {"category": risk.category, "paths": list(risk.paths)} for risk in case.expected
+                ],
+                "hard": case.hard,
+            }
+        )
+    canonical = json.dumps(serializable, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def get_case(case_id: str):
     for case in all_cases():
         if case.id == case_id:
@@ -68,15 +92,18 @@ def make_diff(before: dict[str, str], after: dict[str, str]) -> str:
     return "\n".join(chunks)
 
 
-def materialize(case_id: str, root: Path) -> MaterializedCase:
+def materialize(case_id: str, root: Path, version: str = "after") -> MaterializedCase:
     case = get_case(case_id)
-    repo = root / case.id / "repo"
+    if version not in {"before", "after"}:
+        raise ValueError("version must be before or after")
+    files = case.before if version == "before" else case.after
+    repo = root / case.id / version / "repo"
     repo.mkdir(parents=True, exist_ok=True)
-    for rel, content in case.after.items():
+    for rel, content in files.items():
         target = repo / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-    oracle = root / case.id / "oracle_test.py"
+    oracle = root / case.id / version / "oracle_test.py"
     oracle.parent.mkdir(parents=True, exist_ok=True)
     oracle.write_text(case.oracle, encoding="utf-8")
     diff = make_diff(case.before, case.after)

@@ -4,8 +4,8 @@
 
 DiffRadius is an agentic pull-request investigator for senior developers and tech leads. Instead of
 reviewing only the changed lines, it traces the **behavioral impact radius** of a change through callers,
-consumers, persistence, configuration, caches, retries, permissions and async lifecycles, then makes an
-independent verifier prove every release-risk claim against repository evidence.
+consumers, persistence, configuration, caches, retries, permissions and lifecycle boundaries, then asks
+an independent verifier to prove every release-risk claim against repository evidence.
 
 Built for the **micro1 Agentic Workflows Hackathon 2026**.
 
@@ -15,12 +15,13 @@ A code diff is compact; its consequences are not. A reviewer often has to answer
 
 - Did a changed exception contract leave an indirect caller unguarded?
 - Will old persisted records still load after a new field is introduced?
-- Does a response rename break an internal/export consumer that was not touched in the PR?
-- Did a retry create duplicate side effects?
-- Did a mutation stop invalidating a cache?
+- Does a response rename break a consumer that was not touched in the PR?
+- Did a retry duplicate a side effect?
+- Did a new cache make authorization stale?
+- Did a lazy iterator escape the transaction that owns its data?
 
-A conventional AI review can stop once the diff itself looks plausible. DiffRadius deliberately moves
-outside the diff, forms testable failure hypotheses, and then verifies them.
+A locally-correct patch can therefore be globally unsafe. DiffRadius deliberately leaves the diff,
+forms concrete failure hypotheses, follows dependencies, and verifies the evidence before reporting.
 
 ## Intended user and bottleneck
 
@@ -28,67 +29,80 @@ outside the diff, forms testable failure hypotheses, and then verifies them.
 
 **Bottleneck:** impact analysis is fragmented and manual. Relevant evidence is spread across call sites,
 contracts, configuration and runtime assumptions, and the reviewer must repeatedly decide where to look
-next. Missing one indirect dependency can turn a locally-correct change into a production regression.
+next. Missing one indirect dependency can turn a reasonable-looking change into a production regression.
 
-**Value:** reduce missed release risks while keeping false alarms low enough that the output remains
-usable as an engineering review, not an AI-generated checklist.
+**Value:** improve hidden-risk detection without drowning the reviewer in speculative AI warnings.
 
-## Workflow
+## Final workflow hypothesis
 
 ```text
 Ticket + diff + repository
         |
         v
   Impact Scout
-  traces changed behavior and dependants
+  traces changed contracts and dependants
         |
         v
 Adversarial Reviewer
-  tries to construct concrete failure cases
+  constructs realistic counterexamples
         |
         v
  Evidence Verifier
-  re-opens evidence and rejects weak claims
+  independently re-opens evidence
+  and rejects weak claims
         |
         v
- Release-risk report
+ Polished release-risk report
 ```
 
-Every stage uses the same bounded, read-only tools:
+Every agent gets only five bounded, read-only tools: list files, read bounded file ranges, search text,
+read the supplied diff, and read the supplied ticket. Repository path traversal is blocked.
 
-- list repository files;
-- read bounded file ranges;
-- search repository text;
-- read the supplied diff;
-- read the supplied ticket.
+The architecture is a **hypothesis**, not a foregone conclusion. The evaluation includes an ablation
+matrix so each extra stage has to earn its latency and cost:
 
-The final architecture is deliberately **not assumed to be better**. The repository includes a
-single-agent baseline using the same model and tools. The multi-stage workflow survives only if the
-fixed evaluation shows a worthwhile quality gain.
+| Stage | Workflow | What it tests |
+|---|---|---|
+| `baseline` | one general reviewer | fair starting point |
+| `impact` | Impact Scout → Review Synthesizer | value of explicit impact mapping |
+| `adversarial` | Impact Scout → Adversary → Synthesizer | incremental value of counterexample generation |
+| `final` | Impact Scout → Adversary → **Evidence Verifier** | whether independent verification improves trustworthiness |
 
 ## Evaluation
 
-The primary metric is **finding F1**. Recall alone would reward an agent that reports every imaginable
-risk; precision alone would reward saying nothing. F1 reflects the actual product promise: catch real
-release risks without drowning the reviewer in unsupported claims.
+The primary metric is **finding F1**. Recall alone rewards an agent that reports every imaginable risk;
+precision alone rewards silence. F1 reflects the product promise: catch real release risks while keeping
+unsupported alarms low.
 
-The fixed benchmark has **14 synthetic software changes**:
+The fixed benchmark currently contains **18 synthetic software changes**:
 
-- 12 changes with known hidden regressions;
-- 2 safe negative controls;
-- one intentionally indirect hard case;
-- visible tests that pass after every change;
-- evaluator-only oracle tests that expose the hidden regression in broken cases.
+- **15 regression cases**, including one PR with two independent hidden risks;
+- **3 safe negative controls** to penalize indiscriminate warning generation;
+- several deliberately indirect/hard cases;
+- visible tests that pass both before and after the change;
+- evaluator-only oracle tests that pass **before** each regression and fail **after** it.
 
-A finding matches ground truth only when both its risk category and an affected evidence path match.
-A case is perfect only when all expected risks are found **and no false-positive findings are added**.
+That last invariant matters: it proves the held-out failure is attributable to the change rather than a
+pre-existing broken test. The evaluator also records a SHA-256 benchmark fingerprint so all compared
+runs can be tied to the same frozen cases.
 
-Baseline and final receive the same ticket, diff, repository, tools and model. The final workflow uses
-more model calls because orchestration is the intervention under test, so runtime and token usage are
-reported alongside F1, recall, precision and perfect-case rate.
+A predicted finding matches ground truth only when both its risk category and an expected evidence path
+match. A case is perfect only when every expected risk is found **and no false-positive findings are
+added**.
 
-**No improvement number is claimed yet.** The benchmark is fixed first; results are generated only by
-running the documented evaluation.
+All experiment stages receive the same ticket, diff, repository, model and repository tools. The
+orchestration and specialist instructions are the intervention. Runtime, requests, tokens and an
+approximate uncached-token cost are reported alongside F1, recall, precision, regression-case detection,
+safe-case accuracy and perfect-case rate.
+
+**No quality-improvement number is claimed yet.** Results stay pending until the fixed benchmark is run
+with the real model and the complete JSON evidence is saved.
+
+## Judge demo
+
+A lightweight Vercel demo is included under `demo/`. It visualizes the workflow, frozen benchmark,
+integrity invariant and — after a live evaluation is frozen — reads the exact committed comparison
+artifact rather than a hand-entered marketing number. The CLI remains the source of truth.
 
 ## Quick start
 
@@ -100,17 +114,20 @@ pytest
 python scripts/validate_benchmark.py
 ```
 
-The deterministic validation does **not** require an API key.
+The deterministic validation requires **no API key** and verifies the full before/after oracle invariant for all 18 cases.
 
-To run the agent benchmark:
+Run the full experiment matrix:
 
 ```bash
 export OPENAI_API_KEY='...'
 export DIFFRADIUS_MODEL='gpt-5.6-luna'
-diffradius evaluate --mode both --output results/benchmark
+diffradius evaluate --mode all --output results/benchmark
 ```
 
-To review a real local change:
+This produces machine-readable JSON, a Markdown comparison table, and local trajectories for every
+stage. To compare only the simple baseline and final workflow, use `--mode both`.
+
+Review a real local change:
 
 ```bash
 diffradius review \
@@ -121,6 +138,9 @@ diffradius review \
   --output results/review
 ```
 
+The user-facing result is written to `results/review/review.md`; the structured result is preserved as
+`review.json`.
+
 ## Agent trajectories
 
 Each run stores a local JSON trajectory containing:
@@ -128,45 +148,57 @@ Each run stores a local JSON trajectory containing:
 - the instruction/input given to each agent;
 - every repository tool call and bounded response preview;
 - each structured agent output;
-- the final report path.
+- per-stage usage;
+- the final report and workflow usage.
 
-Hosted Agents SDK tracing is disabled by default. Local trajectories exist specifically so a judge can
-follow representative runs from instructions through tool evidence to the final decision.
+Hosted Agents SDK tracing is disabled by default. Local trajectories exist so a judge can follow a run
+from instruction → tool evidence → hypothesis → verification → decision without exposing unrelated
+telemetry.
 
 ## Repository map
 
 ```text
 src/diffradius/
-  agents.py          agent roles and instructions
+  agents.py          baseline + specialist agent instructions
   tools.py           bounded read-only repository tools
-  workflow.py        baseline and multi-stage orchestration
-  scoring.py         deterministic scoring
-  benchmark.py       fixed-case materialization and oracle isolation
-  evaluate.py        baseline/final benchmark runner
+  workflow.py        baseline, ablations and final orchestration
+  scoring.py         deterministic finding-level scoring
+  benchmark.py       case materialization, oracle isolation, fingerprint
+  evaluate.py        fixed benchmark runner + experiment comparison
+  render.py          polished Markdown review/comparison output
   trajectory.py      local reproducibility traces
+  trajectory_render.py judge-friendly Markdown trace renderer
+  pricing.py         transparent approximate model-cost calculation
 
-benchmarks/cases.py  14 fixed synthetic change scenarios
+benchmarks/           18 fixed synthetic change scenarios
+demo/                 static Vercel judge demo
+evidence/             frozen live results (pending until measured)
 scripts/validate_benchmark.py
+scripts/freeze_evidence.py
+.github/workflows/benchmark.yml
 IMPROVEMENT_CHANGELOG.md
 docs/ARCHITECTURE.md
 docs/EVALUATION.md
 docs/REPRODUCTION.md
 docs/VIDEO_SCRIPT.md
+docs/SUBMISSION_CHECKLIST.md
 ```
 
 ## Improvement changelog
 
-See [IMPROVEMENT_CHANGELOG.md](IMPROVEMENT_CHANGELOG.md). It records experiments as hypotheses and
-keeps results marked pending until measured. Components that do not contribute will be removed rather
-than justified after the fact.
+[IMPROVEMENT_CHANGELOG.md](IMPROVEMENT_CHANGELOG.md) is intentionally an experiment log rather than a
+success story written in advance. Components that do not contribute will be removed and the failed
+experiment will remain documented.
 
 ## Safety and data handling
 
-DiffRadius performs only read operations on the target repository. Path traversal is blocked at the
-repository boundary. Credentials are never required in submission files. The included benchmark uses
-synthetic code so evaluation and trajectories can be shared publicly without exposing proprietary data.
+DiffRadius performs only read operations on the target repository and deliberately does not execute
+arbitrary target-repository code. Credentials are never written to submission files. Hosted tracing is
+disabled. The included benchmark uses synthetic code so evaluation results and representative
+trajectories can be shared publicly without exposing proprietary data. See [SECURITY.md](SECURITY.md).
 
 ## Reproduce it
 
-See [docs/REPRODUCTION.md](docs/REPRODUCTION.md) for clean-environment commands, and
-[docs/EVALUATION.md](docs/EVALUATION.md) for the scoring protocol.
+See [docs/REPRODUCTION.md](docs/REPRODUCTION.md) for clean-environment commands,
+[docs/EVALUATION.md](docs/EVALUATION.md) for the scoring protocol, and
+[docs/SUBMISSION_CHECKLIST.md](docs/SUBMISSION_CHECKLIST.md) for the remaining hackathon deliverables.

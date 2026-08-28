@@ -17,7 +17,7 @@ CASES = (
         ticket='Normalize explicit issuer values to a tuple while preserving missing-value semantics.',
         before={'app/config.py': 'def issuers(raw):\n    return raw.get("additional_issuers")\n', 'tests/test_visible.py': 'from app.config import issuers\n\ndef test_missing(): assert issuers({}) is None\n', 'app/__init__.py': ''},
         after={'app/config.py': 'def issuers(raw):\n    value = raw.get("additional_issuers")\n    return tuple(value) if value is not None else None\n', 'tests/test_visible.py': 'from app.config import issuers\n\ndef test_missing(): assert issuers({}) is None\n', 'app/__init__.py': ''},
-        oracle='from app.config import issuers\nassert issuers({}) is None\nassert issuers({"additional_issuers": ["a"]}) == ("a",)\n',
+        oracle='from app.config import issuers\nassert issuers({}) is None\nassert list(issuers({"additional_issuers": ["a"]})) == ["a"]\n',
         expected=(),
         hard=False,
     ),

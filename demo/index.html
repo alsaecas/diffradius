@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="DiffRadius traces the hidden impact radius of a code change, attacks failure hypotheses, and verifies every release-risk claim against repository evidence." />
+  <title>DiffRadius — Find the code your diff forgot</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <header class="nav shell"><a class="brand" href="#top"><span class="brand-mark"><i></i><i></i><i></i></span><span>DiffRadius</span></a><nav><a href="#workflow">Workflow</a><a href="#benchmark">Benchmark</a><a href="#evidence">Evidence</a><a href="#reproduce">Reproduce</a></nav><a class="nav-cta" href="https://github.com/alsaecas/diffradius">GitHub ↗</a></header>
+  <main id="top">
+    <section class="hero shell">
+      <div class="eyebrow"><span class="pulse"></span> micro1 Agentic Workflows Hackathon 2026</div>
+      <h1>Find the code<br><span>your diff forgot.</span></h1>
+      <p class="hero-copy">A pull request can be locally correct and still be unsafe to ship. DiffRadius traces the behavioral impact radius, attacks concrete failure hypotheses, then makes an independent verifier prove every claim against the repository.</p>
+      <div class="hero-actions"><a class="button primary" href="#benchmark">Explore the benchmark</a><a class="button ghost" href="#reproduce">Run from a clean environment</a></div>
+      <div class="hero-grid"><div class="stat"><strong>18</strong><span>frozen cases</span></div><div class="stat"><strong>15</strong><span>hidden regressions</span></div><div class="stat"><strong>3</strong><span>safe controls</span></div><div class="stat"><strong>4</strong><span>ablation stages</span></div></div>
+    </section>
+    <section class="shell problem-grid"><div class="section-kicker">THE BOTTLENECK</div><div><h2>A diff is compact.<br>Its consequences are not.</h2></div><div class="problem-copy"><p>Senior reviewers routinely have to leave the changed lines and inspect callers, consumers, persisted data, auth boundaries, caches, retries, configuration and async lifecycles.</p><p>Single-pass AI review often stops once the local patch looks plausible. DiffRadius makes <em>leaving the diff</em> an explicit part of the workflow.</p></div></section>
+    <section id="workflow" class="workflow shell">
+      <div class="section-head"><div><div class="section-kicker">PURPOSEFUL ORCHESTRATION</div><h2>Each stage has one job.</h2></div><p>More agents are not automatically better. The benchmark contains a full ablation matrix so each extra stage has to earn its latency and cost.</p></div>
+      <div class="flow"><article class="flow-card" data-stage="01"><div class="flow-num">01</div><h3>Impact Scout</h3><p>Maps changed behavior and traces direct and indirect dependants before judging risk.</p><ul><li>Callers & consumers</li><li>State & persistence</li><li>Config & lifecycle</li></ul></article><div class="connector">→</div><article class="flow-card" data-stage="02"><div class="flow-num">02</div><h3>Adversarial Reviewer</h3><p>Turns the impact map into concrete counterexamples and hunts for paths the scout missed.</p><ul><li>Failure construction</li><li>Assumption attacks</li><li>Regression-test thinking</li></ul></article><div class="connector">→</div><article class="flow-card verifier" data-stage="03"><div class="flow-num">03</div><h3>Evidence Verifier</h3><p>Re-opens the repository and rejects unsupported, duplicate, pre-existing or merely stylistic claims.</p><ul><li>Independent verification</li><li>False-positive control</li><li>Release decision</li></ul></article></div>
+    </section>
+    <section id="benchmark" class="benchmark-wrap"><div class="shell">
+      <div class="section-head"><div><div class="section-kicker">FIXED BEFORE MEASUREMENT</div><h2>An evaluation designed to be attacked.</h2></div><p>Every regression passes its visible tests both before and after the change. The evaluator-only oracle passes before and fails after, proving the hidden failure was introduced by the PR.</p></div>
+      <div class="invariant"><div><span>BEFORE</span><b>visible ✓</b><b>oracle ✓</b></div><div class="arrow">→</div><div><span>AFTER</span><b>visible ✓</b><b class="bad">oracle ✕</b></div><p>Regression invariant</p></div>
+      <div class="explorer"><aside class="case-list" id="caseList"></aside><div class="case-panel"><div class="case-meta"><span id="caseBadge"></span><span id="caseRisk"></span></div><h3 id="caseTitle">Loading benchmark…</h3><p class="ticket"><span>Ticket</span><q id="caseTicket"></q></p><div class="tabs"><button class="tab active" data-tab="diff">Diff</button><button class="tab" data-tab="truth">Evaluator ground truth</button></div><pre id="caseCode" class="code-panel"></pre><p class="disclosure">Ground truth is public for reproducibility but is materialized <strong>outside</strong> the repository visible to agents during evaluation.</p></div></div>
+      <div class="fingerprint">Benchmark SHA-256 <code id="fingerprint">loading…</code></div>
+    </div></section>
+    <section id="evidence" class="evidence shell"><div class="section-head"><div><div class="section-kicker">MEASURED IMPROVEMENT</div><h2>No invented numbers.</h2></div><p>The site reads the same frozen comparison artifact produced by the CLI. Until a live full-matrix run is frozen, the project deliberately says “pending” rather than publishing a marketing claim.</p></div><div id="resultsState" class="results-state pending"><div class="status-dot"></div><div><strong>Live benchmark evidence pending</strong><span>Code, benchmark integrity and CI are ready. The measured table appears here automatically when the evidence bundle is frozen and redeployed.</span></div></div><div id="resultsTableWrap" class="results-table-wrap hidden"><table class="results-table"><thead><tr><th>Stage</th><th>F1</th><th>Recall</th><th>Precision</th><th>Regressions caught</th><th>Safe cases clean</th><th>Tokens</th></tr></thead><tbody id="resultsBody"></tbody></table></div><div class="metric-note"><strong>Primary metric: finding F1.</strong> Recall alone rewards alarm spam; precision alone rewards silence. F1 captures the product promise: catch real release risks without burying a reviewer in unsupported claims.</div></section>
+    <section class="proof shell"><div class="proof-card"><span>01</span><h3>Same inputs</h3><p>Every mode receives the same ticket, diff, repository, tools and model.</p></div><div class="proof-card"><span>02</span><h3>Costs exposed</h3><p>Requests, input/output tokens, wall time and estimated model cost are reported with quality.</p></div><div class="proof-card"><span>03</span><h3>Safe controls</h3><p>Three clean changes punish reviewers that generate generic “just in case” findings.</p></div><div class="proof-card"><span>04</span><h3>Readable trajectories</h3><p>Prompts, tool calls, bounded responses and structured outputs are saved locally for judges.</p></div></section>
+    <section id="reproduce" class="reproduce shell"><div class="repro-copy"><div class="section-kicker">REPRODUCIBLE FROM CLEAN</div><h2>Clone. Validate. Evaluate.</h2><p>The deterministic integrity checks need no API key. A live model run is one command after setting the key in your shell.</p><a href="https://github.com/alsaecas/diffradius/blob/main/docs/REPRODUCTION.md">Full reproduction guide ↗</a></div><div class="terminal"><div class="terminal-head"><i></i><i></i><i></i><span>terminal</span></div><pre><code><span class="dim">$</span> git clone https://github.com/alsaecas/diffradius.git
+<span class="dim">$</span> cd diffradius
+<span class="dim">$</span> python -m venv .venv
+<span class="dim">$</span> source .venv/bin/activate
+<span class="dim">$</span> pip install -e '.[dev]'
+
+<span class="comment"># No API key required</span>
+<span class="dim">$</span> pytest
+<span class="dim">$</span> python scripts/validate_benchmark.py
+
+<span class="comment"># Full baseline → ablation → final matrix</span>
+<span class="dim">$</span> export OPENAI_API_KEY='...'
+<span class="dim">$</span> diffradius evaluate --mode all</code></pre></div></section>
+  </main>
+  <footer class="shell"><div class="brand footer-brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>DiffRadius</span></div><p>Find the code your diff forgot.</p><p class="muted">Built for micro1 Agentic Workflows Hackathon 2026.</p></footer>
+  <script src="/app.js" defer></script>
+</body>
+</html>

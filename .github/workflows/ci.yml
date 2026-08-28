@@ -18,3 +18,7 @@ jobs:
       - run: python -m compileall -q src benchmarks scripts tests
       - run: pytest
       - run: python scripts/validate_benchmark.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm run build

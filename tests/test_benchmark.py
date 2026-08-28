@@ -25,11 +25,14 @@ def test_visible_tests_pass_and_oracles_encode_ground_truth():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         for spec in all_cases():
-            case = materialize(spec.id, root)
-            visible = run_visible_tests(case)
-            assert visible.returncode == 0, f"{case.id}: {visible.stdout}\n{visible.stderr}"
-            oracle = run_oracle(case)
-            if case.expected:
-                assert oracle.returncode != 0, f"{case.id}: oracle should expose regression"
+            before = materialize(spec.id, root, "before")
+            after = materialize(spec.id, root, "after")
+            assert run_visible_tests(before).returncode == 0, f"{spec.id}: before visible tests fail"
+            assert run_visible_tests(after).returncode == 0, f"{spec.id}: after visible tests fail"
+            before_oracle = run_oracle(before)
+            after_oracle = run_oracle(after)
+            assert before_oracle.returncode == 0, f"{spec.id}: oracle must pass before the change\n{before_oracle.stderr}"
+            if after.expected:
+                assert after_oracle.returncode != 0, f"{spec.id}: oracle should expose regression"
             else:
-                assert oracle.returncode == 0, f"{case.id}: safe control should pass oracle"
+                assert after_oracle.returncode == 0, f"{spec.id}: safe control should pass oracle"

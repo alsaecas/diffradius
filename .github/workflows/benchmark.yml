@@ -1,0 +1,62 @@
+name: Agent benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: OpenAI model used for every stage
+        required: true
+        default: gpt-5.6-luna
+      cases:
+        description: Optional comma-separated case IDs; leave blank for the full frozen benchmark
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DIFFRADIUS_MODEL: ${{ inputs.model }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e '.[dev]'
+      - name: Verify API key is configured
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::Add OPENAI_API_KEY as a repository Actions secret before running this workflow."
+            exit 1
+          fi
+      - name: Freeze benchmark integrity before model calls
+        run: |
+          pytest
+          python scripts/validate_benchmark.py
+      - name: Run complete ablation matrix
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.cases }}" ]; then
+            diffradius evaluate --mode all --cases "${{ inputs.cases }}" --output results/benchmark
+          else
+            diffradius evaluate --mode all --output results/benchmark
+          fi
+      - name: Freeze judge-facing evidence bundle
+        if: ${{ inputs.cases == '' }}
+        run: python scripts/freeze_evidence.py --results results/benchmark --evidence evidence
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diffradius-evidence-${{ github.run_id }}
+          path: |
+            results/benchmark
+            evidence
+          if-no-files-found: error
+          retention-days: 30

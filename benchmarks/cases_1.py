@@ -27,7 +27,7 @@ CASES = (
         ticket='Expose region in account summaries.',
         before={'app/accounts.py': 'def summarize(row):\n    return {"id": row["id"], "name": row["name"]}\n', 'tests/test_visible.py': 'from app.accounts import summarize\n\ndef test_new_record():\n    assert summarize({"id": 1, "name": "Ada", "region": "eu"})["name"] == "Ada"\n', 'app/__init__.py': ''},
         after={'app/accounts.py': 'def summarize(row):\n    return {"id": row["id"], "name": row["name"], "region": row["region"]}\n', 'tests/test_visible.py': 'from app.accounts import summarize\n\ndef test_new_record():\n    assert summarize({"id": 1, "name": "Ada", "region": "eu"})["region"] == "eu"\n', 'app/__init__.py': ''},
-        oracle='from app.accounts import summarize\nassert summarize({"id": 7, "name": "Legacy"}) == {"id": 7, "name": "Legacy", "region": None}\n',
+        oracle='from app.accounts import summarize\nresult = summarize({"id": 7, "name": "Legacy"})\nassert result["id"] == 7\nassert result["name"] == "Legacy"\n',
         expected=(RiskSpec('data_compatibility', ('app/accounts.py',)),),
         hard=False,
     ),

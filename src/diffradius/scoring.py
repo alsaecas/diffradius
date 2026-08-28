@@ -18,6 +18,19 @@ class CaseScore:
     false_positives: int
     false_negatives: int
     perfect: bool
+    expected_count: int
+
+    @property
+    def is_safe(self) -> bool:
+        return self.expected_count == 0
+
+    @property
+    def detected_regression(self) -> bool:
+        return self.expected_count > 0 and self.true_positives > 0
+
+    @property
+    def clean_safe_case(self) -> bool:
+        return self.is_safe and self.false_positives == 0
 
 
 @dataclass(frozen=True)
@@ -26,9 +39,13 @@ class AggregateScore:
     precision: float
     f1: float
     perfect_case_rate: float
+    regression_case_detection_rate: float
+    safe_case_accuracy: float
     true_positives: int
     false_positives: int
     false_negatives: int
+    regression_cases: int
+    safe_cases: int
 
 
 def _paths(finding: Finding) -> set[str]:
@@ -36,6 +53,7 @@ def _paths(finding: Finding) -> set[str]:
 
 
 def score_case(report: ReviewReport, expected: Iterable[ExpectedRisk]) -> CaseScore:
+    expected = list(expected)
     remaining = list(expected)
     matched_findings: set[int] = set()
     tp = 0
@@ -54,7 +72,7 @@ def score_case(report: ReviewReport, expected: Iterable[ExpectedRisk]) -> CaseSc
 
     fp = len(report.findings) - len(matched_findings)
     fn = len(remaining)
-    return CaseScore(tp, fp, fn, perfect=(fn == 0 and fp == 0))
+    return CaseScore(tp, fp, fn, perfect=(fn == 0 and fp == 0), expected_count=len(expected))
 
 
 def aggregate(scores: Iterable[CaseScore]) -> AggregateScore:
@@ -66,4 +84,28 @@ def aggregate(scores: Iterable[CaseScore]) -> AggregateScore:
     precision = tp / (tp + fp) if tp + fp else 1.0
     f1 = 2 * recall * precision / (recall + precision) if recall + precision else 0.0
     perfect = sum(1 for s in scores if s.perfect) / len(scores) if scores else 0.0
-    return AggregateScore(recall, precision, f1, perfect, tp, fp, fn)
+
+    regression_scores = [s for s in scores if not s.is_safe]
+    safe_scores = [s for s in scores if s.is_safe]
+    regression_detection = (
+        sum(1 for s in regression_scores if s.detected_regression) / len(regression_scores)
+        if regression_scores
+        else 1.0
+    )
+    safe_accuracy = (
+        sum(1 for s in safe_scores if s.clean_safe_case) / len(safe_scores) if safe_scores else 1.0
+    )
+
+    return AggregateScore(
+        recall=recall,
+        precision=precision,
+        f1=f1,
+        perfect_case_rate=perfect,
+        regression_case_detection_rate=regression_detection,
+        safe_case_accuracy=safe_accuracy,
+        true_positives=tp,
+        false_positives=fp,
+        false_negatives=fn,
+        regression_cases=len(regression_scores),
+        safe_cases=len(safe_scores),
+    )

@@ -18,51 +18,58 @@ def report(*findings: Finding) -> ReviewReport:
     return ReviewReport(decision="block" if findings else "approve", summary="x", findings=list(findings))
 
 
-def test_exact_match_is_perfect():
+def test_exact_category_and_path_matches():
     score = score_case(
-        report(finding(RiskCategory.ERROR_PROPAGATION, "app/form.py")),
-        [ExpectedRisk(RiskCategory.ERROR_PROPAGATION, ("app/form.py",))],
+        report(finding(RiskCategory.AUTHORIZATION, "app/auth.py")),
+        [ExpectedRisk(RiskCategory.AUTHORIZATION, ("app/auth.py",))],
     )
-    assert score.true_positives == 1
-    assert score.false_positives == 0
-    assert score.false_negatives == 0
+    assert (score.true_positives, score.false_positives, score.false_negatives) == (1, 0, 0)
     assert score.perfect
 
 
-def test_extra_claim_prevents_perfect_score():
+def test_wrong_path_is_false_positive_and_false_negative():
     score = score_case(
-        report(
-            finding(RiskCategory.ERROR_PROPAGATION, "app/form.py"),
-            finding(RiskCategory.CONFIGURATION, "app/config.py"),
-        ),
-        [ExpectedRisk(RiskCategory.ERROR_PROPAGATION, ("app/form.py",))],
+        report(finding(RiskCategory.AUTHORIZATION, "app/other.py")),
+        [ExpectedRisk(RiskCategory.AUTHORIZATION, ("app/auth.py",))],
     )
-    assert score.false_positives == 1
+    assert (score.true_positives, score.false_positives, score.false_negatives) == (0, 1, 1)
     assert not score.perfect
 
 
-def test_wrong_evidence_path_does_not_match():
+def test_extra_finding_prevents_perfect_case():
     score = score_case(
-        report(finding(RiskCategory.ERROR_PROPAGATION, "app/other.py")),
-        [ExpectedRisk(RiskCategory.ERROR_PROPAGATION, ("app/form.py",))],
+        report(
+            finding(RiskCategory.AUTHORIZATION, "app/auth.py"),
+            finding(RiskCategory.CONFIGURATION, "app/config.py"),
+        ),
+        [ExpectedRisk(RiskCategory.AUTHORIZATION, ("app/auth.py",))],
     )
-    assert score.true_positives == 0
-    assert score.false_positives == 1
-    assert score.false_negatives == 1
+    assert (score.true_positives, score.false_positives, score.false_negatives) == (1, 1, 0)
+    assert not score.perfect
 
 
-def test_negative_control_rewards_no_findings():
+def test_safe_case_with_no_findings_is_perfect():
     score = score_case(report(), [])
     assert score.perfect
+    assert score.is_safe
+    assert score.clean_safe_case
 
 
-def test_aggregate_metrics():
+def test_aggregate_reports_regression_detection_and_safe_accuracy():
     scores = [
-        score_case(report(finding(RiskCategory.CONFIGURATION, "a.py")), [ExpectedRisk(RiskCategory.CONFIGURATION, ("a.py",))]),
-        score_case(report(finding(RiskCategory.OTHER, "b.py")), []),
+        score_case(
+            report(finding(RiskCategory.AUTHORIZATION, "app/auth.py")),
+            [ExpectedRisk(RiskCategory.AUTHORIZATION, ("app/auth.py",))],
+        ),
+        score_case(
+            report(),
+            [ExpectedRisk(RiskCategory.CONFIGURATION, ("app/config.py",))],
+        ),
+        score_case(report(), []),
+        score_case(report(finding(RiskCategory.OTHER, "app/x.py")), []),
     ]
-    result = aggregate(scores)
-    assert result.recall == 1.0
-    assert result.precision == 0.5
-    assert 0.66 < result.f1 < 0.67
-    assert result.perfect_case_rate == 0.5
+    agg = aggregate(scores)
+    assert agg.regression_case_detection_rate == 0.5
+    assert agg.safe_case_accuracy == 0.5
+    assert agg.regression_cases == 2
+    assert agg.safe_cases == 2

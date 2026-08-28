@@ -1,25 +1,39 @@
-# 5-minute submission video outline
+# Submission video — ≤5 minute outline
 
-**0:00–0:35 — Problem**  
-A PR diff is not the system. Senior reviewers lose time tracing callers, consumers, persisted data,
-configuration and failure paths to answer: *what else did this change break?*
+## 0:00–0:35 — Problem
 
-**0:35–1:05 — Baseline**  
-Show one fixed benchmark case and the single-agent baseline. Explain that baseline and final use the
-same model, same tools and same inputs.
+A PR diff is not the system. Senior reviewers repeatedly trace callers, consumers, persisted data,
+configuration and lifetime assumptions to answer one question: **what else did this change break?**
 
-**1:05–2:35 — One end-to-end DiffRadius execution**  
-Show Impact Scout traversing beyond the diff, Adversarial Reviewer proposing a concrete counterexample,
-and Evidence Verifier reopening files and rejecting/accepting claims. End on the usable release report.
+## 0:35–1:05 — Fair baseline
 
-**2:35–3:35 — Evidence**  
-Show the 14-case benchmark, negative controls, hard case, F1/recall/precision/perfect-case rate, runtime
-and token usage. Do not cherry-pick; show complete baseline and final results.
+Show one fixed hard benchmark case and the single-agent baseline. Explain that every experiment gets the
+same model, repository tools, ticket and diff; only the workflow changes.
 
-**3:35–4:25 — Improvement changelog**  
-Show which stage contributed most and one stage/idea that was removed or revised because evidence did
-not justify it.
+## 1:05–2:25 — One end-to-end DiffRadius execution
 
-**4:25–5:00 — Hot take + reproducibility**  
-State the observed failure mode, the lesson for reliable agents, then show the clean-install commands
-and trajectory artifacts.
+Show Impact Scout leaving the diff, Adversarial Reviewer constructing a concrete counterexample, and
+Evidence Verifier independently reopening the relevant files. Finish on `review.md`, not raw JSON.
+
+## 2:25–3:25 — Evidence
+
+Show the 18-case benchmark and the before/after oracle invariant. Then show `comparison.md`: F1, recall,
+precision, perfect-case rate, time, tokens and estimated cost for baseline → impact → adversarial → final.
+Do not cherry-pick a case; show the complete aggregate result.
+
+## 3:25–4:15 — Improvement changelog
+
+Show the measured stage deltas. Name the component that contributed most and explicitly show one
+experiment that was removed/revised—or, if every component survived, the weakest stage and why its gain
+still justified the cost.
+
+## 4:15–4:45 — Failure mode / hot take
+
+Use an actual trajectory failure to state the lesson. Current hypothesis: AI review fails first through
+**premature locality**, then through speculative warnings when told to search more broadly. Impact mapping
+attacks the first; evidence verification attacks the second.
+
+## 4:45–5:00 — Reproduce
+
+Show the clean install, deterministic benchmark validation, one evaluation command, benchmark fingerprint,
+and trajectory directory.

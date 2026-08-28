@@ -37,7 +37,7 @@ CASES = (
         ticket='Retry transient payment failures once.',
         before={'app/payments.py': 'def charge_once(gateway, account, amount):\n    return gateway.charge(account, amount)\n', 'tests/test_visible.py': 'from app.payments import charge_once\n\nclass Gateway:\n    def charge(self, account, amount): return "ok"\n\ndef test_success():\n    assert charge_once(Gateway(), "a", 10) == "ok"\n', 'app/__init__.py': ''},
         after={'app/payments.py': 'def charge_once(gateway, account, amount):\n    try:\n        return gateway.charge(account, amount)\n    except TimeoutError:\n        return gateway.charge(account, amount)\n', 'tests/test_visible.py': 'from app.payments import charge_once\n\nclass Gateway:\n    def charge(self, account, amount): return "ok"\n\ndef test_success():\n    assert charge_once(Gateway(), "a", 10) == "ok"\n', 'app/__init__.py': ''},
-        oracle='from app.payments import charge_once\nclass Gateway:\n    def __init__(self): self.charges = 0\n    def charge(self, account, amount):\n        self.charges += 1\n        if self.charges == 1: raise TimeoutError("response lost after commit")\n        return "ok"\ng = Gateway()\ncharge_once(g, "a", 10)\nassert g.charges == 1\n',
+        oracle='from app.payments import charge_once\nclass Gateway:\n    def __init__(self): self.charges = 0\n    def charge(self, account, amount):\n        self.charges += 1\n        if self.charges == 1: raise TimeoutError("response lost after commit")\n        return "ok"\ng = Gateway()\ntry: charge_once(g, "a", 10)\nexcept TimeoutError: pass\nassert g.charges == 1\n',
         expected=(RiskSpec('idempotency', ('app/payments.py',)),),
         hard=False,
     ),
