@@ -82,6 +82,7 @@ class RunUsage(BaseModel):
     output_tokens: int = 0
     total_tokens: int = 0
     elapsed_seconds: float = 0.0
+    estimated_cost_usd: float | None = None
 
 
 class WorkflowResult(BaseModel):
