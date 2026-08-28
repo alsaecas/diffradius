@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "diffradius"
+version = "0.1.0"
+description = "Agentic pull-request risk investigation with evidence verification."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Alejandro Sáez Castells"}]
+dependencies = [
+  "openai-agents==0.22.0",
+  "pydantic>=2.11,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<9"]
+
+[project.scripts]
+diffradius = "diffradius.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/diffradius"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
