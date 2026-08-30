@@ -2,77 +2,56 @@
 
 If you have five minutes, use this order.
 
-## 1. Understand the bottleneck — 45 seconds
+## 1. See the result — 30 seconds
 
-A pull request is a small diff over a much larger behavioral system. The hard review question is not
-“does this changed function look reasonable?” but **“what else now behaves differently?”**.
+| Mode | Seeded risk recall | Regression PRs caught | Safe controls clean | Strict precision | Strict F1 |
+|---|---:|---:|---:|---:|---:|
+| Direct prompt | **56.2%** | 60.0% | **100%** | 75.0% | 0.643 |
+| General tool reviewer | **87.5%** | 86.7% | **100%** | 87.5% | 0.875 |
+| **DiffRadius final** | **100%** | **100%** | **100%** | **94.1%** | **0.970** |
 
-DiffRadius is for a senior engineer or tech lead making a release decision. It deliberately traces
-callers, consumers, persistence, configuration, caches, retry semantics, authorization and lifetime
-boundaries before reporting a risk.
+The headline is **56.2% → 100% seeded-risk recall**, while safe-case accuracy remained **100%**.
 
-## 2. See why this is agentic — 60 seconds
+## 2. Understand the problem — 40 seconds
 
-The final candidate workflow separates three jobs:
+A PR is a small diff over a larger behavioral system. DiffRadius is for the engineer answering: **“what else now behaves differently?”** It follows callers, consumers and preserved contracts instead of stopping at changed lines.
 
-1. **Impact Scout** — leaves the diff and maps affected behavior/dependants.
-2. **Adversarial Reviewer** — turns that map into concrete failure counterexamples.
-3. **Evidence Verifier** — independently re-opens files and rejects unsupported claims.
+## 3. See why the final design is agentic — 50 seconds
 
-This is not “more agents = better.” The repo contains four evaluation modes—`baseline`, `impact`,
-`adversarial`, `final`—so every added stage has to earn its latency and token cost.
+The final `DiffRadius Evidence Investigator` chooses which bounded repository tools to call, where to search next, whether to inspect the before-version, and whether the evidence supports a concrete counterexample. It is one agent because the experiments rejected a specialist swarm.
 
-## 3. Attack the benchmark — 90 seconds
-
-Run:
+## 4. Attack the benchmark — 60 seconds
 
 ```bash
 pytest
 python scripts/validate_benchmark.py
 ```
 
-The fixed benchmark has 18 synthetic PRs: 15 regressions and 3 safe controls. Every regression enforces:
+18 cases: 15 hidden regressions and 3 safe controls. Every regression has visible tests PASS before/after and a held-out oracle PASS before / FAIL after.
 
-```text
-visible tests before  PASS
-visible tests after   PASS
-oracle before         PASS
-oracle after          FAIL
-```
+Final fingerprint: `87c7f191a64e9beb1e55d32ddfa3b67782028aca75720203a4471ba31fad5889`.
 
-Safe controls are PASS/PASS. The oracle is evaluator-only and materialized outside the repository exposed
-to agents. Every live result carries the same SHA-256 benchmark fingerprint.
+## 5. Inspect exact evidence — 60 seconds
 
-## 4. Inspect measured evidence — 60 seconds
-
-After the live benchmark is frozen, start with:
+Open:
 
 - `evidence/README.md`
 - `evidence/results/comparison.md`
 - `evidence/results/comparison.json`
+- `evidence/trajectories/15-multi-risk-access-cache-final.md`
 
-The primary metric is finding F1. Secondary metrics expose regression-case detection, safe-case accuracy,
-perfect-case rate, time, tokens and estimated cost. The evidence freezer refuses mixed models,
-fingerprints or case orders and copies the raw evaluator outputs instead of hand-entering scores.
+The full per-case matrix is also preserved in final Action run [33303502804](https://github.com/alsaecas/diffradius/actions/runs/33303502804).
 
-## 5. Follow one trajectory — 45 seconds
+## 6. Read the failed experiments — 40 seconds
 
-Open a Markdown trace in `evidence/trajectories/`. It shows explicit agent input, bounded repository tool
-calls/responses and structured output from instruction to release decision. It deliberately does not
-publish private chain-of-thought.
+Open `IMPROVEMENT_CHANGELOG.md`. The original multi-agent pipeline was about 4× more expensive and worse. The final architecture was selected by measured evidence, not drawn first and justified later.
 
-## 6. Try a real change
+## 7. Try a real change
 
 ```bash
-diffradius review \
-  --repo /path/to/repository \
-  --base main \
-  --head HEAD \
-  --ticket "Describe the intended behavior" \
-  --output results/review
+diffradius review --repo /path/to/repo --base main --head HEAD \
+  --ticket "Describe intended behavior" --output results/review
 ```
 
-The usable artifact is `results/review/review.md`; JSON and the trajectory remain available for audit.
-
-**Live demo:** https://diffradius.vercel.app  
+**Demo:** https://diffradius.vercel.app  
 **Source:** https://github.com/alsaecas/diffradius
