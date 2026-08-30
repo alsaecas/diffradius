@@ -2,115 +2,48 @@
 
 ## Primary metric
 
-**Finding F1** is the primary metric. It balances catching real release risks (recall) with avoiding
-unsupported alarms (precision), which matters for a review a senior engineer must be able to trust.
+**Seeded regression-risk recall** is primary: detected seeded risks / all seeded risks. **Safe-case accuracy** is the false-alarm control. Strict precision/F1 are also published as diagnostics.
 
-A predicted finding matches ground truth only when:
+A seeded risk matches when its predicted category is the canonical category (or a pre-declared equivalent for genuinely ambiguous cross-cutting failures) and at least one cited evidence path intersects the expected affected paths. Each prediction can match at most one seeded risk.
 
-1. its risk category matches; and
-2. at least one cited evidence path matches an expected affected path.
+This rubric was finalized **before** the final frozen run. The final benchmark fingerprint is `87c7f191a64e9beb1e55d32ddfa3b67782028aca75720203a4471ba31fad5889`.
 
-Each prediction can match at most one expected risk. A case is *perfect* only when every expected risk
-is found **and no false-positive findings are added**.
+## Final matrix
 
-## Secondary metrics
+| Mode | Seeded risk recall | Regression PRs caught | Safe controls clean | Strict precision | Strict F1 | Tokens | Est. cost |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Direct prompt | **56.2%** | 60.0% | **100%** | 75.0% | 0.643 | 14,065 | $0.0055 |
+| General tool reviewer | **87.5%** | 86.7% | **100%** | 87.5% | 0.875 | 72,289 | $0.0216 |
+| **DiffRadius final** | **100%** | **100%** | **100%** | **94.1%** | **0.970** | 106,084 | $0.0299 |
 
-The report also exposes metrics that are easier to interpret operationally:
+All stages use the same model and 18 ordered cases. The intervention is the information/tool boundary:
 
-- **regression-case detection rate** — percentage of broken PRs where at least one true hidden risk was found;
-- **safe-case accuracy** — percentage of safe controls where the reviewer produced zero false alarms;
-- **perfect-case rate** — percentage of cases where every expected risk was found with zero extras;
-- **requests / tokens / wall time / estimated cost** — the resource price of each workflow stage.
+| Mode | Information available | Purpose |
+|---|---|---|
+| `prompt` | ticket + unified diff only | simple baseline |
+| `tool` | prompt inputs + five bounded current-repository tools | quantify ordinary repo-tool access |
+| `final` | tool comparator + bounded `read_before_file` and explicit evidence/counterexample discipline | selected DiffRadius workflow |
 
-The primary claim should still be based on F1; secondary metrics explain *how* it changed.
+## Ground-truth integrity
 
-## Frozen synthetic benchmark
+The benchmark has 15 regression cases and 3 safe controls. Every regression must satisfy visible PASS/PASS and oracle PASS/FAIL before/after. Safe controls must remain PASS/PASS. Oracle data is outside the agent-visible repository.
 
-The benchmark contains **18 deterministic changes**:
+## Resource reporting
 
-- 15 regression cases;
-- 3 safe negative controls;
-- one two-risk case;
-- multiple explicitly hard/indirect cases.
+Every stage records wall time, tokens, requests, and approximate model cost. The final matrix cost was $0.0055 / $0.0216 / $0.0299 for prompt/tool/final respectively across 18 cases.
 
-Covered failure families include error propagation, stale state, backward data compatibility, interface
-contracts, authorization, configuration semantics, transactionality, retry/idempotency, async lifecycle,
-security validation, cache consistency, identity normalization and lazy resource lifetimes.
+## Historical experiments
 
-### Ground-truth integrity
-
-Every case has an ordinary visible test suite plus an evaluator-only oracle. Validation enforces:
-
-```text
-Regression case:
-  visible tests before = PASS
-  visible tests after  = PASS
-  oracle before        = PASS
-  oracle after         = FAIL
-
-Safe control:
-  visible tests before = PASS
-  visible tests after  = PASS
-  oracle before        = PASS
-  oracle after         = PASS
-```
-
-This makes the hidden failure attributable to the submitted change instead of a pre-existing bug in the
-fixture. Oracle files are materialized outside the repository that agents can inspect.
-
-The evaluator writes a SHA-256 fingerprint of the complete benchmark definition into every result file.
-Compared runs must have the same fingerprint. At the current freeze, the expected fingerprint is printed
-by `python scripts/validate_benchmark.py`; do not hard-code it into scoring logic.
-
-## Fair experiment matrix
-
-All modes receive the same ticket, diff, changed repository, model and read-only repository tools.
-
-| Mode | Purpose |
-|---|---|
-| `baseline` | normal single-agent review |
-| `impact` | test explicit impact mapping |
-| `adversarial` | measure incremental counterexample generation |
-| `final` | test independent verification at the same stage count as `adversarial` |
-
-The extra model calls are part of the intervention, not hidden. Every mode reports quality plus requests,
-input/output tokens, wall-clock agent time and approximate model cost. The project does **not** claim the
-multi-agent path is “fair” because it costs the same; it is fair because the resource difference is
-explicit and measured alongside outcome quality.
+Earlier multi-agent systems are retained in the changelog and GitHub Action history but are not the selected final architecture. Their failure is part of the submission evidence.
 
 ## Commands
 
 ```bash
 python scripts/validate_benchmark.py
-
-diffradius evaluate --mode baseline --output results/benchmark
-diffradius evaluate --mode impact --output results/benchmark
-diffradius evaluate --mode adversarial --output results/benchmark
+diffradius evaluate --mode prompt --output results/benchmark
+diffradius evaluate --mode tool --output results/benchmark
 diffradius evaluate --mode final --output results/benchmark
-
-# Full matrix + comparison.json + comparison.md
 diffradius evaluate --mode all --output results/benchmark
 ```
 
-A repository-level **Agent benchmark** GitHub Action exposes the same full-matrix run through
-`workflow_dispatch`. It requires `OPENAI_API_KEY` as a repository Actions secret and uploads the raw
-results plus a frozen judge-facing evidence bundle as an artifact.
-
-## Freezing evidence
-
-After one complete live run:
-
-```bash
-python scripts/freeze_evidence.py \
-  --results results/benchmark \
-  --evidence evidence
-```
-
-The freezer refuses to combine different benchmark fingerprints, differently ordered case sets, or
-fewer than ten cases. It copies the complete result matrix and representative baseline/final trajectories
-without editing measured values.
-
-Do not publish improvement claims until the fixed benchmark has been run and its complete result files
-are saved as evidence. Model sampling can make exact reruns vary; reproducibility here means a clean,
-documented path to the same evaluation task, inputs, metrics and artifacts rather than a promise of
-bit-for-bit identical LLM output.
+The final frozen run is GitHub Action `33303502804`.
