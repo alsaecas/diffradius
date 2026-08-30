@@ -1,39 +1,61 @@
-# Submission video — ≤5 minute outline
+# Submission video — target 4:40–4:55
 
-## 0:00–0:35 — Problem
+## 0:00–0:25 — Hook
 
-A PR diff is not the system. Senior reviewers repeatedly trace callers, consumers, persisted data,
-configuration and lifetime assumptions to answer one question: **what else did this change break?**
+**Say:** “A diff tells you what changed. It does not tell you what broke. DiffRadius finds the code your diff forgot.”
 
-## 0:35–1:05 — Fair baseline
+Show the homepage hero and immediately switch to the multi-risk cache/authorization case.
 
-Show one fixed hard benchmark case and the single-agent baseline. Explain that every experiment gets the
-same model, repository tools, ticket and diff; only the workflow changes.
+## 0:25–0:55 — Problem + baseline
 
-## 1:05–2:25 — One end-to-end DiffRadius execution
+Show the small diff. Explain that all visible tests still pass. Show the direct-prompt result from the frozen comparison: **56.2% seeded-risk recall** across the full benchmark.
 
-Show Impact Scout leaving the diff, Adversarial Reviewer constructing a concrete counterexample, and
-Evidence Verifier independently reopening the relevant files. Finish on `review.md`, not raw JSON.
+**Say:** “The baseline sees only the ticket and diff. That is useful, but hidden consequences often live elsewhere.”
 
-## 2:25–3:25 — Evidence
+## 0:55–2:05 — One real DiffRadius trajectory
 
-Show the 18-case benchmark and the before/after oracle invariant. Then show `comparison.md`: F1, recall,
-precision, perfect-case rate, time, tokens and estimated cost for baseline → impact → adversarial → final.
-Do not cherry-pick a case; show the complete aggregate result.
+Open `evidence/trajectories/15-multi-risk-access-cache-final.md`. Scroll through:
+1. `show_diff`;
+2. `list_files`;
+3. `read_file(app/admin.py)` — the untouched mutation path;
+4. `read_before_file(app/access.py)` — timeout used to fail closed;
+5. final output identifying **both** independent risks.
 
-## 3:25–4:15 — Improvement changelog
+Explain that the agent chooses where to look; no oracle is visible to it.
 
-Show the measured stage deltas. Name the component that contributed most and explicitly show one
-experiment that was removed/revised—or, if every component survived, the weakest stage and why its gain
-still justified the cost.
+## 2:05–2:50 — The benchmark proof
 
-## 4:15–4:45 — Failure mode / hot take
+Show the 18-case invariant: visible tests PASS before/after, hidden oracle PASS before / FAIL after. Mention 15 regressions + 3 safe controls and fingerprint.
 
-Use an actual trajectory failure to state the lesson. Current hypothesis: AI review fails first through
-**premature locality**, then through speculative warnings when told to search more broadly. Impact mapping
-attacks the first; evidence verification attacks the second.
+Show the final table:
+- prompt: **56.2% recall**;
+- tool reviewer: **87.5%**;
+- DiffRadius: **100%**;
+- safe controls: **100% clean at all stages**;
+- final strict F1: **0.970**.
 
-## 4:45–5:00 — Reproduce
+## 2:50–3:55 — The failed experiment (the memorable part)
 
-Show the clean install, deterministic benchmark validation, one evaluation command, benchmark fingerprint,
-and trajectory directory.
+Show the Improvement Changelog.
+
+**Say:** “My first design was more impressive on a diagram: Impact Scout, Adversarial Reviewer, Evidence Verifier. It was also worse—F1 fell from 0.750 for one tool agent to 0.545, at roughly four times the cost. I tried a contract-first swarm. It still lost information.”
+
+Then show the final one-agent architecture.
+
+**Say:** “The traces suggested the handoffs were lossy compression. So I removed agents instead of adding another one.”
+
+## 3:55–4:25 — Hot take
+
+**Say:** “For repository review, the agent boundary can be the bug. The improvement was not a bigger swarm; it was giving one agent the right evidence boundary and forcing warnings to become concrete before/after counterexamples.”
+
+## 4:25–4:50 — Reproduce
+
+Show `docs/JUDGES.md`, then terminal commands `pytest`, `python scripts/validate_benchmark.py`, and the evaluation command. End on the live demo + GitHub links.
+
+## Recording checklist
+
+- Keep final export under 5:00.
+- Use 1080p and a large terminal/editor font.
+- Do not scroll through raw JSON; prefer Markdown traces and the web result table.
+- Do not say “100% accurate”; say **“100% seeded-risk recall on this frozen 18-case benchmark.”**
+- Mention the safe controls so the 100% figure cannot be mistaken for alarm spam.
