@@ -1,48 +1,37 @@
-# Hackathon submission checklist
+# Final hackathon submission checklist
 
-## Complete solution code + Improvement Changelog
-
+## Repository and evidence
 - [x] Public runnable repository
-- [x] Intended user and bottleneck explained
-- [x] Agent instructions committed
-- [x] Fair single-agent baseline
-- [x] Explicit ablation modes
-- [x] Improvement Changelog with removed/revisable experiment policy
-- [x] 18-case frozen benchmark with before/after oracle integrity
-- [x] Safe negative controls and multi-risk/hard cases
-- [x] Judge-facing web demo that reads frozen evidence rather than hand-entered metrics
-- [ ] Replace pending evidence with final measured results
-- [ ] Freeze final architecture after ablation
-- [ ] Replace provisional hot take with trajectory-backed insight
+- [x] Intended user/problem explained
+- [x] Direct-prompt baseline
+- [x] Strong tool comparator
+- [x] Selected final agent architecture
+- [x] 18-case benchmark: 15 regressions + 3 safe controls
+- [x] Before/after oracle integrity
+- [x] Frozen final result matrix
+- [x] Benchmark fingerprint
+- [x] Token/time/cost reporting
+- [x] Failed experiments preserved
+- [x] Representative readable trajectories
+- [x] Reproduction guide
+- [x] Vercel demo
 
-## Reproduction guide
+## Manual tasks before pressing Submit
+- [ ] Record video using `docs/VIDEO_SCRIPT.md` (≤5:00)
+- [ ] Upload the video and make it accessible to judges
+- [ ] Put the video URL in the HackerEarth project form
+- [ ] Paste/adapt `SUBMISSION.md` into the project description fields
+- [ ] Add demo URL: https://diffradius.vercel.app
+- [ ] Add source URL: https://github.com/alsaecas/diffradius
+- [ ] Confirm the HackerEarth draft shows correctly
+- [ ] Open video, demo, and GitHub once in an incognito/private window
+- [ ] Submit before the deadline
 
-- [x] Clean-environment setup commands
-- [x] Exact baseline/final/ablation evaluation commands
-- [x] Deterministic benchmark validation
-- [x] Core agent SDK pinned
-- [x] Runtime/token/cost collection
-- [x] Manual GitHub Actions benchmark workflow + artifact
-- [x] Evidence-freeze script validates fingerprint/case set
-- [ ] Commit final benchmark evidence artifacts
-- [ ] Confirm reproduction once from a fresh clone after final freeze
-
-## Solution video — maximum 5 minutes
-
-- [x] Script/shot outline prepared
-- [ ] Record final video after benchmark freeze
-- [ ] Show problem + baseline first
-- [ ] Show one realistic end-to-end execution
-- [ ] Show complete measured comparison
-- [ ] Show most valuable change and one removed/revised experiment
-- [ ] Keep final export ≤5:00
-
-## Agent trajectories
-
-- [x] Local trajectory recorder implemented
-- [x] Inputs, tool calls, outputs and usage captured
-- [x] JSON trajectories render to judge-friendly Markdown
-- [x] Evidence freezer selects representative baseline/final hard-case traces
-- [ ] Confirm representative traces cover every submitted agent role
-- [ ] Include a natural retry/failure/human checkpoint if one occurs; do not fabricate one
-- [ ] Verify selected trajectories contain only synthetic/shareable data
+## Exact evidence identifiers
+- Final Action run: https://github.com/alsaecas/diffradius/actions/runs/33303502804
+- Model: `gpt-5.6-luna`
+- Cases: 18
+- Benchmark fingerprint: `87c7f191a64e9beb1e55d32ddfa3b67782028aca75720203a4471ba31fad5889`
+- Final seeded-risk recall: 100%
+- Final safe-case accuracy: 100%
+- Final strict F1: 0.970
