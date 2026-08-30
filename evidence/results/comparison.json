@@ -1,0 +1,60 @@
+{
+  "primary_metric": "risk_recall",
+  "model": "gpt-5.6-luna",
+  "benchmark_fingerprint": "87c7f191a64e9beb1e55d32ddfa3b67782028aca75720203a4471ba31fad5889",
+  "case_count": 18,
+  "stages": {
+    "prompt": {
+      "f1": 0.6428571428571429,
+      "recall": 0.5625,
+      "precision": 0.75,
+      "perfect_case_rate": 0.5555555555555556,
+      "regression_case_detection_rate": 0.6,
+      "safe_case_accuracy": 1.0,
+      "elapsed_seconds": 40.421,
+      "estimated_cost_usd": 0.005533,
+      "total_tokens": 14065
+    },
+    "tool": {
+      "f1": 0.875,
+      "recall": 0.875,
+      "precision": 0.875,
+      "perfect_case_rate": 0.8333333333333334,
+      "regression_case_detection_rate": 0.8666666666666667,
+      "safe_case_accuracy": 1.0,
+      "elapsed_seconds": 117.971,
+      "estimated_cost_usd": 0.021639,
+      "total_tokens": 72289
+    },
+    "final": {
+      "f1": 0.9696969696969697,
+      "recall": 1.0,
+      "precision": 0.9411764705882353,
+      "perfect_case_rate": 0.9444444444444444,
+      "regression_case_detection_rate": 1.0,
+      "safe_case_accuracy": 1.0,
+      "elapsed_seconds": 144.534,
+      "estimated_cost_usd": 0.029896,
+      "total_tokens": 106084
+    }
+  },
+  "stage_deltas": [
+    {
+      "from": "prompt",
+      "to": "tool",
+      "risk_recall_change": 0.3125,
+      "safe_case_accuracy_change": 0.0,
+      "strict_precision_change": 0.125,
+      "f1_change": 0.2321428571428571
+    },
+    {
+      "from": "tool",
+      "to": "final",
+      "risk_recall_change": 0.125,
+      "safe_case_accuracy_change": 0.0,
+      "strict_precision_change": 0.06617647058823528,
+      "f1_change": 0.09469696969696972
+    }
+  ],
+  "metric_note": "Seeded risk recall is primary. Safe-case accuracy is the false-alarm control. Strict precision/F1 remain diagnostic because regression cases can contain valid unseeded consequences."
+}
