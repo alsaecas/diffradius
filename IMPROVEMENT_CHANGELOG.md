@@ -1,89 +1,86 @@
 # Improvement Changelog
 
-This is an experiment log, not marketing copy. Quality results remain **pending** until the frozen
-benchmark is run with the live model.
+This is the experiment log that selected the final architecture. Failed approaches are intentionally kept.
 
-| Stage | What we tried and why | Evidence | Decision / learning |
+## Final selection
+
+Final frozen run: **56.2% direct-prompt recall → 87.5% general tool recall → 100% DiffRadius recall**, with **100% safe-case accuracy at every stage**. DiffRadius reached strict F1 **0.970** at an estimated **$0.0299** across all 18 cases.
+
+The main lesson was the opposite of the initial architecture assumption: **more agent roles did not make the review better**. Specialization created context loss and additional speculative surface area. The winning design collapsed the workflow into one evidence-seeking agent and invested complexity in tools and verification discipline instead.
+
+## Experiment history
+
+| Experiment | Intervention | Measured outcome | Decision |
 |---|---|---|---|
-| Baseline | One general-purpose reviewer with the same model and repository tools. No explicit impact-radius recipe. | Pending live run. Deterministic harness validated. | Fair starting point. |
-| Iteration 1 — `impact` | Force a separate Impact Scout to map changed contracts and dependants before ordinary synthesis. | Pending live run. | Keep only if F1 gain justifies the second model stage. |
-| Iteration 2 — `adversarial` | Add a specialist that tries to turn hypotheses into realistic counterexamples before synthesis. | Pending live run. | Keep/revise/remove from its incremental delta. |
-| Iteration 3 — `final` | Replace ordinary final synthesis with an independent Evidence Verifier that re-opens repository evidence and rejects weak claims. | Pending live run. | Expected to improve precision; verify rather than assume. |
-| Final architecture | Keep only stages whose measured contribution is worth their runtime/cost. | Pending live run. | Architecture is deliberately not frozen yet. |
+| Direct prompt | Same model; ticket + diff only; no repository tools. | 56.2% seeded-risk recall; 100% safe-case accuracy; strict F1 0.643; $0.0055 / 18 cases. | Keep as the simple baseline. |
+| Strong tool comparator | One general reviewer + five bounded current-repository tools. | 87.5% recall; 100% safe-case accuracy; strict F1 0.875; $0.0216 / 18 cases. | Keep as strong comparator; isolates repo access. |
+| Multi-agent v1 | Impact Scout → Adversarial Reviewer → Evidence Verifier. | F1 **0.545** vs one-agent tool baseline **0.750**; ~$0.094 vs ~$0.023. | Reject. More stages amplified speculation and lost true risks. |
+| Contract-first multi-agent v2 | Change Contract Analyst → Impact Investigator → verifier/synthesis variants, plus before-state evidence. | Best multi-agent recall **0.750** while the one-agent tool baseline reached **1.000** recall on that audited rubric. | Reject swarm; keep before-state capability. |
+| Selected v3 | One evidence investigator + current-repo tools + `read_before_file` + explicit counterexample discipline. | **100% recall**, **100% regression-case detection**, **100% safe-case accuracy**, strict F1 **0.970**; $0.0299 / 18 cases. | **Selected final architecture.** |
 
-## Experiment-design changes already kept
+Historical Action runs are preserved:
+- Multi-agent v1: https://github.com/alsaecas/diffradius/actions/runs/33298664170
+- Contract-first v2: https://github.com/alsaecas/diffradius/actions/runs/33301477629
+- Single-agent candidate: https://github.com/alsaecas/diffradius/actions/runs/33303076070
+- Final frozen run: https://github.com/alsaecas/diffradius/actions/runs/33303502804
 
-### Added negative controls
+## What the first failed run revealed
 
-A benchmark containing only broken changes rewards an agent for always predicting risk. Safe controls
-were added so false positives reduce precision and prevent a perfect-case score.
+The original Scout/Adversary pipeline improved breadth but generated too many plausible hypotheses. The verifier then became conservative enough to discard real compatibility risks. More calls cost about four times as much while reducing measured quality.
 
-### Tightened the perfect-case definition
+**Decision:** do not add another agent to fix an agent-handoff problem.
 
-Finding every expected risk is not enough. A case is perfect only when it also contains **zero extra
-false-positive findings**. This prevents noisy reviews from looking deceptively successful.
+## What the second failed run revealed
 
-### Added safe-case and regression-case outcome metrics
+We added explicit contract reconstruction and a before-version tool. The before-state idea was useful, but splitting it across agents still lost information between structured handoffs.
 
-F1 remains primary, but it can be hard to explain in a five-minute demo. The evaluator now also reports
-how many broken PRs produced at least one true finding and how many safe controls remained warning-free.
-These metrics do not replace F1; they make its precision/recall tradeoff visible. **Keep.**
+**Decision:** separate the useful capability from the orchestration. Keep before-state evidence; remove the multi-agent chain.
 
-### Added before/after oracle validation
+## Evaluation-method audit
 
-Originally the harness checked only that visible tests passed after the change and the held-out oracle
-failed. That was not strong enough: an oracle itself could encode a pre-existing failure. The harness
-now requires every regression oracle to pass on the **before** implementation and fail on the **after**
-implementation, while visible tests pass on both. Several fixtures had to be corrected after this check
-exposed weak ground truth. **Keep.**
+The first scorer required an exact category + evidence-path match and counted every unseeded finding as a false positive. Inspecting trajectories exposed two issues:
 
-### Added multi-risk and indirect cases
+1. a model could describe the correct concrete failure under a different defensible category;
+2. a broken PR can contain an additional real consequence that the synthetic seed did not enumerate.
 
-The initial tiny cases risked making a one-shot reviewer unrealistically easy to score. The benchmark
-now includes 18 changes, a two-risk authorization/cache change, multiple indirect dependencies, lazy
-transaction lifetime behavior, identity-normalization compatibility, and three safe controls. **Keep,
-then freeze before the live run.**
+Before the final frozen run, the rubric was made explicit:
 
-### Added benchmark fingerprinting
+- each seeded risk has a canonical category and, only where genuinely ambiguous, declared equivalent categories;
+- evidence must still touch an expected affected path;
+- **seeded risk recall** is primary;
+- **safe-case accuracy** is the false-alarm control;
+- strict precision/F1 remain visible diagnostics.
 
-Every live evaluation records a SHA-256 fingerprint of the complete case definitions. That makes it
-obvious that baseline, ablations and final were measured on the same frozen benchmark. **Keep.**
+Every rubric revision changed the benchmark fingerprint and forced all compared modes to rerun from scratch on the same ordered 18 cases. The final run uses fingerprint `87c7f191a64e9beb1e55d32ddfa3b67782028aca75720203a4471ba31fad5889`. No benchmark content or scoring rule was edited after that freeze.
 
-### Added usage/cost and polished reports
+## Benchmark-integrity improvements kept
 
-Agent quality is not enough if an extra stage costs too much. The harness reports requests, tokens, wall
-time and a transparent approximate uncached-token cost. Real reviews render to Markdown rather than
-ending as raw model JSON. **Keep.**
+- Three safe negative controls.
+- Perfect-case scoring requires all expected risks and zero extra findings.
+- Two-risk authorization/cache case and multiple indirect cases.
+- Before/after oracle validation: regression oracles pass before and fail after.
+- SHA-256 benchmark fingerprinting.
+- Token, request, wall-time, and approximate cost reporting.
+- Local JSON trajectories plus judge-friendly Markdown rendering.
+- Evidence freezer that refuses mixed models, fingerprints, or ordered case sets.
+- Vercel demo as presentation only; CLI/evidence remain the source of truth.
 
-### Added readable local trajectories instead of hosted trace dependency
+## Removed experiment
 
-The hackathon requires agent trajectories. The first implementation saved structured JSON. We added a
-Markdown renderer and an evidence-freeze step so judges can follow agent inputs, bounded tool calls,
-tool responses and structured outputs without needing access to a third-party trace viewer. Private
-chain-of-thought is intentionally not part of the artifact. **Keep.**
+**Adversarial Reviewer — removed from the submitted final architecture.**
 
-### Added a web demo but kept the CLI as source of truth
+It sounded useful, but across both swarm experiments it did not justify its latency/cost and frequently expanded the hypothesis set without improving final recall. The historical code/run evidence is retained to make this decision auditable.
 
-A polished demo helps end-to-end presentation, but a second web-specific evaluator could create drift or
-encourage hand-entered metrics. The Vercel site is therefore static and reads the exact frozen
-`comparison.json` when evidence exists. Before that, it visibly says results are pending. **Keep as
-presentation, not as evaluation logic.**
+## Main failure mode
 
-## Experiment we are explicitly willing to remove
+The project started with the hypothesis that AI review fails mainly through **premature locality**: the changed lines look reasonable, so the reviewer stops searching.
 
-The Adversarial Reviewer is the prime candidate. A specialist agent can easily add latency while merely
-paraphrasing the Impact Scout. If `impact -> adversarial` does not produce a meaningful F1/recall gain,
-it will be removed and that negative result will stay in this changelog.
+The experiments found a second, more important failure mode:
 
-## Current failure-mode hypothesis
+> **Agent handoffs can become lossy compression.**
 
-The likely failure mode of ordinary AI PR review is **premature locality**: once the changed lines look
-reasonable, the reviewer stops searching. The second likely failure is the opposite: once prompted to
-look for hidden risks, a model may over-generate plausible-sounding warnings. DiffRadius tests a two-part
-response: explicit impact traversal for recall, followed by independent evidence verification for
-precision.
+A specialist may discover useful nuance, but once it is compressed into a schema and handed to another model, later stages can inherit the abstraction instead of the evidence. More agents can therefore reduce both recall and efficiency.
 
-## Hot take — provisional until trajectories are measured
+## Hot take
 
-> Better AI code review may depend less on making the reviewer smarter than on controlling *where it
-> looks* and making a second pass prove its accusations.
+> **For repository review, the agent boundary can be the bug. The winning improvement was not adding a smarter reviewer or a bigger swarm; it was giving one agent the right evidence tools and forcing every warning to cash out as a concrete before/after counterexample.**
