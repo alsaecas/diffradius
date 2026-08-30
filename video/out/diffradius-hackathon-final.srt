@@ -1,0 +1,123 @@
+1
+00:00:00,800 --> 00:00:08,800
+A diff tells you what changed. It does not tell you what broke.
+
+2
+00:00:09,000 --> 00:00:19,200
+DiffRadius finds the code your diff forgot—callers, state, permissions, caches, and lifecycle boundaries beyond the edited lines.
+
+3
+00:00:20,500 --> 00:00:30,000
+A locally reasonable pull request can pass its visible tests while breaking an untouched workflow somewhere else in the repository.
+
+4
+00:00:30,300 --> 00:00:40,500
+Reviewers normally trace consumers, compatibility assumptions, persisted data, configuration, authorization, retries, and transaction lifetimes by hand.
+
+5
+00:00:41,000 --> 00:00:49,400
+The frozen direct-prompt baseline saw only the ticket and diff. It recovered 56.2 percent of the seeded risks.
+
+6
+00:00:50,500 --> 00:00:59,000
+Here is the benchmark's hardest centerpiece: cache permission scopes to reduce repeated directory calls. The edit looks small.
+
+7
+00:00:59,400 --> 00:01:08,300
+The final investigator showed the diff, read the ticket, listed the repository, and inspected the visible happy-path test.
+
+8
+00:01:08,700 --> 00:01:17,800
+Then it left the changed file. In untouched admin.py, replace_scopes mutates permissions—but has no connection to the new cache.
+
+9
+00:01:18,200 --> 00:01:27,500
+That proves one independent release risk: after a permission change, cached write access can remain stale and incorrectly survive revocation.
+
+10
+00:01:28,000 --> 00:01:37,400
+The investigator also read the before-version. A directory timeout previously returned false. The new handler returns true.
+
+11
+00:01:37,800 --> 00:01:44,500
+That is a second, independent risk: a transient directory outage becomes a fail-open authorization bypass.
+
+12
+00:01:45,500 --> 00:01:55,000
+This is not prompting over a diff. One investigator chooses among six bounded, read-only tools and decides where the evidence leads.
+
+13
+00:01:55,500 --> 00:02:05,500
+It can show the ticket and diff, list files, search text, read current files, and read the before-version when compatibility matters.
+
+14
+00:02:06,000 --> 00:02:14,500
+The goal is fewer, provable warnings—not more warnings. Every finding must become a concrete counterexample backed by inspected paths.
+
+15
+00:02:15,500 --> 00:02:25,000
+We measured that behavior on eighteen deterministic pull requests: fifteen hidden regressions, three safe controls, and one two-risk case.
+
+16
+00:02:25,500 --> 00:02:35,500
+For every regression, visible tests pass before and after. The held-out oracle passes before, then fails after the change.
+
+17
+00:02:36,000 --> 00:02:45,800
+The oracle is evaluator-only during review. Safe controls stay pass-pass, punishing a reviewer that simply generates more alarms.
+
+18
+00:02:46,200 --> 00:02:54,500
+The ordered case set and scoring rubric were frozen under this SHA-256 fingerprint before the final comparison.
+
+19
+00:02:55,500 --> 00:03:04,500
+The direct prompt reached 56.2 percent seeded-risk recall. Giving a general reviewer repository tools raised that to 87.5 percent.
+
+20
+00:03:05,000 --> 00:03:14,500
+DiffRadius reached 100 percent seeded-risk recall on this frozen benchmark, while every safe control remained warning-free.
+
+21
+00:03:15,000 --> 00:03:23,000
+Strict F1 was 0.970. All eighteen final reviews cost 2.99 cents.
+
+22
+00:03:23,500 --> 00:03:29,500
+Repository access produced the first major gain. Before-state evidence and counterexample discipline closed the remaining gap.
+
+23
+00:03:30,500 --> 00:03:40,000
+But the most important result was a failure. The original design chained an Impact Scout, Adversarial Reviewer, and Evidence Verifier.
+
+24
+00:03:40,500 --> 00:03:49,500
+It sounded smarter. Measured on the historical rubric, F1 fell from 0.750 for one tool agent to 0.545.
+
+25
+00:03:50,000 --> 00:03:58,500
+It also cost roughly four times more. A contract-first swarm still underperformed the single-agent baseline on its audited rubric.
+
+26
+00:03:59,000 --> 00:04:04,500
+The trajectories showed speculation accumulating and useful compatibility evidence disappearing across structured handoffs.
+
+27
+00:04:05,500 --> 00:04:14,000
+In our repository-review experiments, the agent boundary can be the bug. Specialist handoffs behaved like lossy compression.
+
+28
+00:04:14,500 --> 00:04:23,500
+The winning change was not another agent. It was one investigator with the right evidence boundary and a counterexample requirement.
+
+29
+00:04:24,000 --> 00:04:29,500
+The result is simpler, cheaper than the swarm, auditable, and reproducible from the committed benchmark and trajectories.
+
+30
+00:04:30,500 --> 00:04:36,000
+Clone the repository, install the development package, run pytest, then validate the frozen benchmark.
+
+31
+00:04:36,300 --> 00:04:41,500
+DiffRadius. Find the code your diff forgot.
