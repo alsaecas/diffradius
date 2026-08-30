@@ -10,6 +10,11 @@ from .models import Finding, ReviewReport, RiskCategory
 class ExpectedRisk:
     category: RiskCategory
     paths: tuple[str, ...]
+    accepted_categories: tuple[RiskCategory, ...] = ()
+
+    @property
+    def categories(self) -> tuple[RiskCategory, ...]:
+        return (self.category, *self.accepted_categories)
 
 
 @dataclass(frozen=True)
@@ -53,6 +58,15 @@ def _paths(finding: Finding) -> set[str]:
 
 
 def score_case(report: ReviewReport, expected: Iterable[ExpectedRisk]) -> CaseScore:
+    """Score seeded risks deterministically.
+
+    A seeded risk may declare a small set of accepted mechanism categories when the
+    same concrete failure is reasonably described in more than one way (for example,
+    a lazy cursor escaping a transaction can be called transactionality or lifecycle).
+    Path evidence is still mandatory. Extra findings remain visible as strict false
+    positives, but recall is the primary benchmark metric because regression cases can
+    legitimately contain additional, unseeded release risks.
+    """
     expected = list(expected)
     remaining = list(expected)
     matched_findings: set[int] = set()
@@ -62,7 +76,7 @@ def score_case(report: ReviewReport, expected: Iterable[ExpectedRisk]) -> CaseSc
         for index, finding in enumerate(report.findings):
             if index in matched_findings:
                 continue
-            if finding.category != expected_risk.category:
+            if finding.category not in expected_risk.categories:
                 continue
             if _paths(finding).intersection(expected_risk.paths):
                 tp += 1

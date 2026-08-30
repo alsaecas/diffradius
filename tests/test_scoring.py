@@ -27,6 +27,14 @@ def test_exact_category_and_path_matches():
     assert score.perfect
 
 
+def test_declared_equivalent_category_matches_same_seeded_risk():
+    score = score_case(
+        report(finding(RiskCategory.ASYNC_LIFECYCLE, "app/export.py")),
+        [ExpectedRisk(RiskCategory.TRANSACTIONALITY, ("app/export.py",), (RiskCategory.ASYNC_LIFECYCLE,))],
+    )
+    assert (score.true_positives, score.false_positives, score.false_negatives) == (1, 0, 0)
+
+
 def test_wrong_path_is_false_positive_and_false_negative():
     score = score_case(
         report(finding(RiskCategory.AUTHORIZATION, "app/other.py")),
@@ -36,7 +44,7 @@ def test_wrong_path_is_false_positive_and_false_negative():
     assert not score.perfect
 
 
-def test_extra_finding_prevents_perfect_case():
+def test_extra_finding_prevents_perfect_case_but_not_seeded_recall():
     score = score_case(
         report(
             finding(RiskCategory.AUTHORIZATION, "app/auth.py"),
@@ -61,10 +69,7 @@ def test_aggregate_reports_regression_detection_and_safe_accuracy():
             report(finding(RiskCategory.AUTHORIZATION, "app/auth.py")),
             [ExpectedRisk(RiskCategory.AUTHORIZATION, ("app/auth.py",))],
         ),
-        score_case(
-            report(),
-            [ExpectedRisk(RiskCategory.CONFIGURATION, ("app/config.py",))],
-        ),
+        score_case(report(), [ExpectedRisk(RiskCategory.CONFIGURATION, ("app/config.py",))]),
         score_case(report(), []),
         score_case(report(finding(RiskCategory.OTHER, "app/x.py")), []),
     ]

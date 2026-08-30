@@ -3,14 +3,15 @@ from __future__ import annotations
 import difflib
 import hashlib
 import importlib.util
-import json
 import inspect
+import json
 import runpy
 import sys
 import tempfile
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
+
 from .models import RiskCategory
 from .repository import RepositoryView
 from .scoring import ExpectedRisk
@@ -22,6 +23,7 @@ class MaterializedCase:
     title: str
     ticket: str
     repo: Path
+    before_repo: Path
     oracle: Path
     diff: str
     expected: tuple[ExpectedRisk, ...]
@@ -51,8 +53,6 @@ def all_cases():
     return _load_cases_module().CASES
 
 
-
-
 def benchmark_fingerprint() -> str:
     serializable = []
     for case in all_cases():
@@ -65,7 +65,12 @@ def benchmark_fingerprint() -> str:
                 "after": case.after,
                 "oracle": case.oracle,
                 "expected": [
-                    {"category": risk.category, "paths": list(risk.paths)} for risk in case.expected
+                    {
+                        "category": risk.category,
+                        "accepted_categories": list(risk.accepted_categories),
+                        "paths": list(risk.paths),
+                    }
+                    for risk in case.expected
                 ],
                 "hard": case.hard,
             }
@@ -92,29 +97,52 @@ def make_diff(before: dict[str, str], after: dict[str, str]) -> str:
     return "\n".join(chunks)
 
 
+def _write_tree(root: Path, files: dict[str, str]) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    for rel, content in files.items():
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+
+
 def materialize(case_id: str, root: Path, version: str = "after") -> MaterializedCase:
     case = get_case(case_id)
     if version not in {"before", "after"}:
         raise ValueError("version must be before or after")
-    files = case.before if version == "before" else case.after
-    repo = root / case.id / version / "repo"
-    repo.mkdir(parents=True, exist_ok=True)
-    for rel, content in files.items():
-        target = repo / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+
+    before_repo = root / case.id / "before" / "repo"
+    after_repo = root / case.id / "after" / "repo"
+    _write_tree(before_repo, case.before)
+    _write_tree(after_repo, case.after)
+    repo = before_repo if version == "before" else after_repo
+
     oracle = root / case.id / version / "oracle_test.py"
     oracle.parent.mkdir(parents=True, exist_ok=True)
     oracle.write_text(case.oracle, encoding="utf-8")
     diff = make_diff(case.before, case.after)
     expected = tuple(
-        ExpectedRisk(RiskCategory(spec.category), spec.paths) for spec in case.expected
+        ExpectedRisk(
+            RiskCategory(spec.category),
+            spec.paths,
+            tuple(RiskCategory(category) for category in spec.accepted_categories),
+        )
+        for spec in case.expected
     )
-    return MaterializedCase(case.id, case.title, case.ticket, repo, oracle, diff, expected, case.hard)
+    return MaterializedCase(
+        case.id,
+        case.title,
+        case.ticket,
+        repo,
+        before_repo,
+        oracle,
+        diff,
+        expected,
+        case.hard,
+    )
 
 
 def repository_view(case: MaterializedCase) -> RepositoryView:
-    return RepositoryView(case.repo, case.diff, case.ticket)
+    return RepositoryView(case.repo, case.diff, case.ticket, before_root=case.before_repo)
 
 
 @dataclass(frozen=True)
@@ -135,12 +163,14 @@ def _with_repo_path(repo: Path):
         def __enter__(self):
             _clear_case_modules()
             sys.path.insert(0, str(repo))
+
         def __exit__(self, exc_type, exc, tb):
             try:
                 sys.path.remove(str(repo))
             except ValueError:
                 pass
             _clear_case_modules()
+
     return _PathContext()
 
 

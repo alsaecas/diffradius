@@ -34,7 +34,7 @@ def list_files(ctx: RunContextWrapper[ReviewContext], pattern: str = "*") -> lis
 def read_file(
     ctx: RunContextWrapper[ReviewContext], path: str, start_line: int = 1, end_line: int = 240
 ) -> str:
-    """Read a bounded range of a repository file using a repository-relative path."""
+    """Read a bounded range of the current repository file."""
     out = ctx.context.repository.read_file(path, start_line, end_line)
     ctx.context.log_tool(
         "read_file", {"path": path, "start_line": start_line, "end_line": end_line}, out
@@ -43,10 +43,22 @@ def read_file(
 
 
 @tool
+def read_before_file(
+    ctx: RunContextWrapper[ReviewContext], path: str, start_line: int = 1, end_line: int = 240
+) -> str:
+    """Read the same file before the supplied change, when a before-version is available."""
+    out = ctx.context.repository.read_before_file(path, start_line, end_line)
+    ctx.context.log_tool(
+        "read_before_file", {"path": path, "start_line": start_line, "end_line": end_line}, out
+    )
+    return out
+
+
+@tool
 def search_text(
     ctx: RunContextWrapper[ReviewContext], query: str, glob: str = "*"
 ) -> list[str]:
-    """Search repository text case-insensitively and return path/line matches."""
+    """Search current repository text case-insensitively and return path/line matches."""
     out = ctx.context.repository.search_text(query, glob)
     ctx.context.log_tool("search_text", {"query": query, "glob": glob}, out)
     return out
@@ -69,3 +81,4 @@ def show_ticket(ctx: RunContextWrapper[ReviewContext]) -> str:
 
 
 READ_ONLY_TOOLS = [list_files, read_file, search_text, show_diff, show_ticket]
+CHANGE_AWARE_TOOLS = [list_files, read_file, read_before_file, search_text, show_diff, show_ticket]

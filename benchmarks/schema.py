@@ -7,6 +7,7 @@ from dataclasses import dataclass
 class RiskSpec:
     category: str
     paths: tuple[str, ...]
+    accepted_categories: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

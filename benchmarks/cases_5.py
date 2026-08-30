@@ -20,7 +20,7 @@ CASES = (
         },
         oracle='''from app.access import can_write\nfrom app.admin import replace_scopes\n\nclass Directory:\n    def __init__(self): self.values = {"u1": ["write"]}; self.fail = False\n    def scopes(self, user_id):\n        if self.fail: raise TimeoutError("directory unavailable")\n        return self.values[user_id]\n    def set_scopes(self, user_id, scopes): self.values[user_id] = scopes\n\ndirectory = Directory(); cache = {}\nassert can_write(directory, cache, "u1") is True\nreplace_scopes(directory, "u1", [])\nassert can_write(directory, cache, "u1") is False\ndirectory.fail = True\nassert can_write(directory, {}, "u1") is False\n''',
         expected=(
-            RiskSpec("cache_consistency", ("app/access.py", "app/admin.py")),
+            RiskSpec("cache_consistency", ("app/access.py", "app/admin.py"), ("stale_state",)),
             RiskSpec("authorization", ("app/access.py",)),
         ),
         hard=True,
@@ -42,7 +42,7 @@ CASES = (
             "tests/test_visible.py": '''from app.accounts import create\n\ndef test_create_is_normalized():\n    store = {}\n    assert create(store, "User-A", "Ada") == "user-a"\n''',
         },
         oracle='''from app.importer import import_rows\nstore = {"User-A": "Legacy uppercase", "user-a": "Legacy lowercase"}\nimport_rows(store, [{"external_id": "USER-A", "name": "New"}])\n# Normalizing a new identifier must not overwrite a distinct pre-existing identity.\nassert store["user-a"] == "Legacy lowercase"\nassert store["User-A"] == "Legacy uppercase"\n''',
-        expected=(RiskSpec("data_compatibility", ("app/accounts.py", "app/importer.py")),),
+        expected=(RiskSpec("data_compatibility", ("app/accounts.py", "app/importer.py"), ("idempotency",)),),
         hard=True,
     ),
     Case(
@@ -82,7 +82,13 @@ CASES = (
             "tests/test_visible.py": '''from app.repository import rows\n\nclass Db:\n    def read_rows(self): return iter([{"name": "Ada"}])\n\ndef test_rows(): assert list(rows(Db())) == [{"name": "Ada"}]\n''',
         },
         oracle='''from contextlib import contextmanager\nfrom app.export import export_names\n\nclass Db:\n    def __init__(self): self.active = False\n    @contextmanager\n    def transaction(self):\n        self.active = True\n        try: yield\n        finally: self.active = False\n    def read_rows(self):\n        def generate():\n            if not self.active: raise RuntimeError("cursor used after transaction")\n            yield {"name": "Ada"}\n        return generate()\n\nassert export_names(Db()) == ["Ada"]\n''',
-        expected=(RiskSpec("indirect_dependency", ("app/export.py", "app/repository.py")),),
+        expected=(
+            RiskSpec(
+                "transactionality",
+                ("app/export.py", "app/repository.py"),
+                ("async_lifecycle", "indirect_dependency"),
+            ),
+        ),
         hard=True,
     ),
 )

@@ -18,7 +18,7 @@ CASES = (
         before={'app/config.py': 'def issuers(raw):\n    return raw.get("additional_issuers")\n\ndef should_enable_external_auth(raw):\n    return issuers(raw) is not None\n', 'tests/test_visible.py': 'from app.config import issuers\n\ndef test_explicit_issuers():\n    assert issuers({"additional_issuers": ["a"]}) == ["a"]\n', 'app/__init__.py': ''},
         after={'app/config.py': 'def issuers(raw):\n    return raw.get("additional_issuers", [])\n\ndef should_enable_external_auth(raw):\n    return issuers(raw) is not None\n', 'tests/test_visible.py': 'from app.config import issuers\n\ndef test_explicit_issuers():\n    assert issuers({"additional_issuers": ["a"]}) == ["a"]\n', 'app/__init__.py': ''},
         oracle='from app.config import should_enable_external_auth\nassert should_enable_external_auth({}) is False\n',
-        expected=(RiskSpec('configuration', ('app/config.py',)),),
+        expected=(RiskSpec('configuration', ('app/config.py',), ('authorization',)),),
         hard=False,
     ),
     Case(

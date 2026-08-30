@@ -16,7 +16,7 @@ def _review(args: argparse.Namespace) -> int:
     repo = Path(args.repo).resolve()
     diff = Path(args.diff_file).read_text(encoding="utf-8") if args.diff_file else git_diff(repo, args.base, args.head)
     ticket = Path(args.ticket_file).read_text(encoding="utf-8") if args.ticket_file else args.ticket
-    view = RepositoryView(repo, diff, ticket or "No ticket supplied")
+    view = RepositoryView(repo, diff, ticket or "No ticket supplied", base_ref=args.base)
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
     result = run_final(view, out_dir / "trajectories")

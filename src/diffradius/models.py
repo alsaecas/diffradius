@@ -41,6 +41,15 @@ class CandidateRisk(BaseModel):
     verification_plan: str
 
 
+class ChangeContract(BaseModel):
+    intended_changes: list[str] = Field(default_factory=list)
+    preserved_invariants: list[str] = Field(default_factory=list)
+    previously_accepted_behaviors: list[str] = Field(default_factory=list)
+    changed_symbols: list[str] = Field(default_factory=list)
+    investigation_targets: list[str] = Field(default_factory=list)
+    uncertainties: list[str] = Field(default_factory=list)
+
+
 class ImpactMap(BaseModel):
     changed_behavior: list[str] = Field(default_factory=list)
     affected_symbols: list[str] = Field(default_factory=list)

@@ -71,26 +71,37 @@ def render_comparison(comparison: dict) -> str:
     lines = [
         "# DiffRadius Benchmark Comparison",
         "",
-        f"Primary metric: **{comparison['primary_metric'].upper()}**",
+        "Primary metric: **SEEDED RISK RECALL**",
         "",
-        "| Stage | F1 | Recall | Precision | Regression cases caught | Safe cases clean | Perfect cases | Time (s) | Tokens | Est. cost |",
+        comparison.get("metric_note", ""),
+        "",
+        "| Stage | Risk recall | Regression cases caught | Safe cases clean | Strict precision* | F1* | Perfect cases* | Time (s) | Tokens | Est. cost |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for stage, values in comparison["stages"].items():
         cost = "—" if values["estimated_cost_usd"] is None else f"${values['estimated_cost_usd']:.4f}"
         lines.append(
-            f"| {stage} | {values['f1']:.3f} | {values['recall']:.3f} | "
-            f"{values['precision']:.3f} | {values['regression_case_detection_rate']:.1%} | "
-            f"{values['safe_case_accuracy']:.1%} | {values['perfect_case_rate']:.1%} | "
-            f"{values['elapsed_seconds']:.1f} | {values['total_tokens']:,} | {cost} |"
+            f"| {stage} | {values['recall']:.3f} | {values['regression_case_detection_rate']:.1%} | "
+            f"{values['safe_case_accuracy']:.1%} | {values['precision']:.3f} | {values['f1']:.3f} | "
+            f"{values['perfect_case_rate']:.1%} | {values['elapsed_seconds']:.1f} | "
+            f"{values['total_tokens']:,} | {cost} |"
         )
+    lines.extend(
+        [
+            "",
+            "_*Strict precision/F1/perfect-case rate treat every unseeded finding as a false positive. "
+            "They are diagnostics, not the primary metric; safe negative controls measure unsupported "
+            "findings directly._",
+        ]
+    )
     if comparison.get("stage_deltas"):
         lines.extend(["", "## Incremental contribution", ""])
         for delta in comparison["stage_deltas"]:
             lines.append(
-                f"- **{delta['from']} → {delta['to']}**: "
-                f"F1 {delta['f1_change']:+.3f}, precision {delta['precision_change']:+.3f}, "
-                f"recall {delta['recall_change']:+.3f}."
+                f"- **{delta['from']} → {delta['to']}**: risk recall "
+                f"{delta['risk_recall_change']:+.3f}, safe-case accuracy "
+                f"{delta['safe_case_accuracy_change']:+.3f}, strict precision "
+                f"{delta['strict_precision_change']:+.3f}."
             )
     lines.append("")
     return "\n".join(lines)

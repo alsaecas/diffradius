@@ -3,8 +3,8 @@ from __future__ import annotations
 from agents import Agent
 
 from .config import settings
-from .models import AdversarialReview, ImpactMap, ReviewReport
-from .tools import READ_ONLY_TOOLS, ReviewContext
+from .models import AdversarialReview, ChangeContract, ImpactMap, ReviewReport
+from .tools import CHANGE_AWARE_TOOLS, READ_ONLY_TOOLS, ReviewContext
 
 
 BASELINE_INSTRUCTIONS = """
@@ -16,8 +16,8 @@ review with generic best-practice advice. If the change is safe, return no findi
 
 SPECIALIST_COMMON = """
 You investigate a software change inside a bounded, read-only repository. Never invent evidence.
-A claim is useful only when it points to concrete repository evidence. Distinguish a real regression
-from a generic best-practice suggestion. Do not read files outside the repository.
+A claim is useful only when it points to concrete repository evidence. Distinguish an intended
+behavioral change from a regression. Do not read files outside the repository.
 """
 
 
@@ -31,19 +31,40 @@ def baseline_agent() -> Agent[ReviewContext]:
     )
 
 
-def impact_scout_agent() -> Agent[ReviewContext]:
+def contract_agent() -> Agent[ReviewContext]:
     return Agent[ReviewContext](
-        name="Impact Scout",
+        name="Change Contract Analyst",
         model=settings().model,
         instructions=SPECIALIST_COMMON
         + """
-Map the behavioral impact radius before judging the change. Start from the diff, identify changed
-contracts and symbols, then trace direct and indirect dependants. Explicitly consider callers,
-consumers, persistence, configuration, caches, retries, permissions, async lifecycles and tests only
-where the changed behavior makes them relevant. Generate candidate risks with specific evidence and
-an explicit verification plan. A candidate is a hypothesis, not a verdict.
+Before hunting for bugs, reconstruct the behavioral contract of the change. Read the ticket and diff.
+For changed files, compare the current implementation with the before-version when useful. Separate:
+(1) behavior the ticket intentionally changes,
+(2) behavior that should remain compatible,
+(3) inputs/call patterns that the before-version demonstrably accepted,
+(4) symbols and current dependants that deserve investigation.
+Do not report release findings yet. Do not assume that absence of a current fixture means historical
+inputs never existed: the before-version itself is evidence of previously accepted behavior.
 """,
-        tools=READ_ONLY_TOOLS,
+        tools=CHANGE_AWARE_TOOLS,
+        output_type=ChangeContract,
+    )
+
+
+def impact_scout_agent() -> Agent[ReviewContext]:
+    return Agent[ReviewContext](
+        name="Impact Investigator",
+        model=settings().model,
+        instructions=SPECIALIST_COMMON
+        + """
+You receive a structured change contract. Trace the impact radius beyond changed lines and produce
+only concrete candidate regressions. Use current callers/consumers and before-vs-after behavior as
+evidence. A useful candidate must explain a specific counterexample: something that worked before or
+an invariant that should remain true, and how the new code breaks it. Do not generate generic risks
+just because a subsystem (cache, auth, transaction, async, config) exists. One failure may have
+multiple consequences; avoid duplicates unless they are independently testable regressions.
+""",
+        tools=CHANGE_AWARE_TOOLS,
         output_type=ImpactMap,
     )
 
@@ -54,12 +75,12 @@ def adversary_agent() -> Agent[ReviewContext]:
         model=settings().model,
         instructions=SPECIALIST_COMMON
         + """
-You receive an impact map produced by another agent. Try to break the change in realistic ways.
-Challenge assumptions, inspect overlooked paths, and refine or add candidate risks. Prefer concrete
-counterexamples that a regression test could express. Do not promote speculation without repository
-evidence, and do not repeat a candidate merely with different wording.
+This is an experimental stage retained for ablation. You receive contract-first impact candidates.
+Try to falsify them first, then look for one genuinely independent missed failure. Do not broaden the
+review into hypothetical best-practice concerns. Every added candidate must include a before/after or
+caller-based counterexample that could be expressed as a regression test.
 """,
-        tools=READ_ONLY_TOOLS,
+        tools=CHANGE_AWARE_TOOLS,
         output_type=AdversarialReview,
     )
 
@@ -70,28 +91,30 @@ def synthesizer_agent() -> Agent[ReviewContext]:
         model=settings().model,
         instructions=SPECIALIST_COMMON
         + """
-You receive candidate risks from upstream analysis. Convert the supported candidates into a concise,
-usable release-risk report. Remove obvious duplicates and generic advice. You may inspect repository
-files when clarification is needed, but this stage is not an independent evidence-verification pass.
+You receive supported candidate risks from upstream analysis. Convert them into a concise usable
+release-risk report. Remove duplicates and generic advice. Do not invent new risks in this stage.
 Return a final release decision.
 """,
-        tools=READ_ONLY_TOOLS,
+        tools=CHANGE_AWARE_TOOLS,
         output_type=ReviewReport,
     )
 
 
 def verifier_agent() -> Agent[ReviewContext]:
     return Agent[ReviewContext](
-        name="Evidence Verifier",
+        name="Counterexample Verifier",
         model=settings().model,
         instructions=SPECIALIST_COMMON
         + """
-You receive candidate risks from prior agents. Independently verify every candidate against the
-actual repository: re-open the relevant evidence rather than trusting the upstream summary. Reject
-unsupported, duplicate, pre-existing, or merely stylistic claims. A final finding must describe a
-concrete failure mode caused by the supplied diff and contain repository evidence. If evidence is
-insufficient, reject it. Return a final release decision.
+Independently verify every candidate against the actual change. Re-open current and before-version
+files rather than trusting upstream summaries. Keep a candidate when you can establish a concrete
+change-induced counterexample: a previously accepted input/call path now fails, or a preserved
+invariant/current dependant is broken. The before-version is valid compatibility evidence even when
+there is no current fixture proving historical production data. Reject intended ticket behavior,
+pre-existing problems, duplicates, and speculation that depends on unsupported inputs or runtime
+contracts. Preserve distinct supported regressions; do not collapse two independently testable
+failures into one. If nothing is proven, return no findings.
 """,
-        tools=READ_ONLY_TOOLS,
+        tools=CHANGE_AWARE_TOOLS,
         output_type=ReviewReport,
     )

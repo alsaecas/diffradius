@@ -70,7 +70,11 @@ def evaluate(mode: str, output_dir: Path, case_ids: list[str] | None = None) -> 
                     "title": case.title,
                     "hard": case.hard,
                     "expected": [
-                        {"category": risk.category.value, "paths": list(risk.paths)}
+                        {
+                            "category": risk.category.value,
+                            "accepted_categories": [c.value for c in risk.accepted_categories],
+                            "paths": list(risk.paths),
+                        }
                         for risk in case.expected
                     ],
                     "report": result.report.model_dump(mode="json"),
@@ -141,16 +145,22 @@ def compare_results(results: dict[str, dict]) -> dict:
             {
                 "from": previous,
                 "to": current,
+                "risk_recall_change": summary[current]["recall"] - summary[previous]["recall"],
+                "safe_case_accuracy_change": summary[current]["safe_case_accuracy"]
+                - summary[previous]["safe_case_accuracy"],
+                "strict_precision_change": summary[current]["precision"] - summary[previous]["precision"],
                 "f1_change": summary[current]["f1"] - summary[previous]["f1"],
-                "precision_change": summary[current]["precision"] - summary[previous]["precision"],
-                "recall_change": summary[current]["recall"] - summary[previous]["recall"],
             }
         )
     return {
-        "primary_metric": "f1",
+        "primary_metric": "risk_recall",
         "model": next(iter(models)),
         "benchmark_fingerprint": next(iter(fingerprints)),
         "case_count": len(first_case_set),
         "stages": summary,
         "stage_deltas": deltas,
+        "metric_note": (
+            "Risk recall is primary. Strict finding precision is diagnostic because regression cases "
+            "can contain valid unseeded consequences; safe-case accuracy is the hallucination control."
+        ),
     }

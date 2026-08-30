@@ -11,12 +11,13 @@ from agents import RunConfig, Runner, set_tracing_disabled
 from .agents import (
     adversary_agent,
     baseline_agent,
+    contract_agent,
     impact_scout_agent,
     synthesizer_agent,
     verifier_agent,
 )
 from .config import settings
-from .models import AdversarialReview, ImpactMap, ReviewReport, RunUsage, WorkflowResult
+from .models import ChangeContract, ImpactMap, ReviewReport, RunUsage, WorkflowResult
 from .pricing import estimate_cost_usd
 from .repository import RepositoryView
 from .tools import ReviewContext
@@ -95,19 +96,32 @@ def run_baseline(view: RepositoryView, trajectory_dir: Path | None = None) -> Wo
     return _finish(recorder, result.final_output, [usage], trajectory_dir)
 
 
-def _run_scout(view: RepositoryView, recorder: TrajectoryRecorder, context: ReviewContext):
-    scout_result, usage = _run_agent(
-        impact_scout_agent(),
-        "Build an impact map for the supplied ticket and diff. Trace behavior beyond changed lines.",
+def _run_contract(context: ReviewContext):
+    result, usage = _run_agent(
+        contract_agent(),
+        "Reconstruct the change contract before evaluating release risk.",
         context,
     )
-    return scout_result.final_output, usage
+    return result.final_output, usage
 
 
-def _run_adversary(impact: ImpactMap, context: ReviewContext):
+def _run_scout(contract: ChangeContract, context: ReviewContext):
     prompt = (
-        "Here is the Impact Scout output. Attack it and inspect the repository for missed or weak "
-        "failure modes.\n\n" + json.dumps(impact.model_dump(mode="json"), indent=2)
+        "Investigate the repository using this change contract. Find concrete counterexamples beyond "
+        "the diff, not generic risks.\n\n"
+        + json.dumps(contract.model_dump(mode="json"), indent=2)
+    )
+    result, usage = _run_agent(impact_scout_agent(), prompt, context)
+    return result.final_output, usage
+
+
+def _run_adversary(contract: ChangeContract, impact: ImpactMap, context: ReviewContext):
+    prompt = (
+        "Falsify these candidates first, then look for at most one independently testable missed "
+        "regression.\n\nCHANGE CONTRACT\n"
+        + json.dumps(contract.model_dump(mode="json"), indent=2)
+        + "\n\nIMPACT CANDIDATES\n"
+        + json.dumps(impact.model_dump(mode="json"), indent=2)
     )
     result, usage = _run_agent(adversary_agent(), prompt, context)
     return result.final_output, usage
@@ -115,7 +129,7 @@ def _run_adversary(impact: ImpactMap, context: ReviewContext):
 
 def _run_synthesizer(candidates: object, context: ReviewContext):
     prompt = (
-        "Turn these upstream candidates into the final review report.\n\n"
+        "Turn these upstream candidates into the final review report without inventing new risks.\n\n"
         + json.dumps(candidates.model_dump(mode="json"), indent=2)
     )
     result, usage = _run_agent(synthesizer_agent(), prompt, context)
@@ -123,38 +137,48 @@ def _run_synthesizer(candidates: object, context: ReviewContext):
 
 
 def run_impact(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
-    """Ablation: explicit impact map followed by ordinary synthesis."""
+    """Ablation: explicit contract + impact investigation + ordinary synthesis."""
     recorder = TrajectoryRecorder(f"impact-{uuid.uuid4().hex[:12]}")
     context = ReviewContext(view, recorder)
-    impact, scout_usage = _run_scout(view, recorder, context)
+    contract, contract_usage = _run_contract(context)
+    impact, scout_usage = _run_scout(contract, context)
     report, synth_usage = _run_synthesizer(impact, context)
-    return _finish(recorder, report, [scout_usage, synth_usage], trajectory_dir)
+    return _finish(recorder, report, [contract_usage, scout_usage, synth_usage], trajectory_dir)
 
 
 def run_adversarial(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
-    """Ablation: impact map + adversarial pass, without independent verification."""
+    """Ablation: contract + impact + adversarial stage + synthesis."""
     recorder = TrajectoryRecorder(f"adversarial-{uuid.uuid4().hex[:12]}")
     context = ReviewContext(view, recorder)
-    impact, scout_usage = _run_scout(view, recorder, context)
-    adversarial, adversary_usage = _run_adversary(impact, context)
+    contract, contract_usage = _run_contract(context)
+    impact, scout_usage = _run_scout(contract, context)
+    adversarial, adversary_usage = _run_adversary(contract, impact, context)
     report, synth_usage = _run_synthesizer(adversarial, context)
-    return _finish(recorder, report, [scout_usage, adversary_usage, synth_usage], trajectory_dir)
+    return _finish(
+        recorder,
+        report,
+        [contract_usage, scout_usage, adversary_usage, synth_usage],
+        trajectory_dir,
+    )
 
 
 def run_final(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
     recorder = TrajectoryRecorder(f"final-{uuid.uuid4().hex[:12]}")
     context = ReviewContext(view, recorder)
-    impact, scout_usage = _run_scout(view, recorder, context)
-    adversarial, adversary_usage = _run_adversary(impact, context)
+    contract, contract_usage = _run_contract(context)
+    impact, scout_usage = _run_scout(contract, context)
     verifier_prompt = (
-        "Independently verify these candidate risks. Keep only concrete regressions caused by the "
-        "diff. Reject unsupported claims.\n\n"
-        + json.dumps(adversarial.model_dump(mode="json"), indent=2)
+        "Independently verify the candidates against both sides of the change. Keep every distinct "
+        "change-induced counterexample; reject intended behavior and unsupported speculation.\n\n"
+        "CHANGE CONTRACT\n"
+        + json.dumps(contract.model_dump(mode="json"), indent=2)
+        + "\n\nCANDIDATES\n"
+        + json.dumps(impact.model_dump(mode="json"), indent=2)
     )
     verifier_result, verifier_usage = _run_agent(verifier_agent(), verifier_prompt, context)
     return _finish(
         recorder,
         verifier_result.final_output,
-        [scout_usage, adversary_usage, verifier_usage],
+        [contract_usage, scout_usage, verifier_usage],
         trajectory_dir,
     )
