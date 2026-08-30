@@ -10,11 +10,12 @@ from agents import RunConfig, Runner, set_tracing_disabled
 
 from .agents import (
     adversary_agent,
-    baseline_agent,
     contract_agent,
     impact_scout_agent,
+    prompt_baseline_agent,
+    proof_reviewer_agent,
     synthesizer_agent,
-    verifier_agent,
+    tool_reviewer_agent,
 )
 from .config import settings
 from .models import ChangeContract, ImpactMap, ReviewReport, RunUsage, WorkflowResult
@@ -85,100 +86,80 @@ def _finish(
     return WorkflowResult(report=report, usage=usage, trajectory_path=str(path) if path else None)
 
 
-def run_baseline(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
-    recorder = TrajectoryRecorder(f"baseline-{uuid.uuid4().hex[:12]}")
+def run_prompt_baseline(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
+    """Fair direct-prompt baseline: same model, ticket + diff only, no repository tools."""
+    recorder = TrajectoryRecorder(f"prompt-{uuid.uuid4().hex[:12]}")
+    context = ReviewContext(view, recorder)
+    prompt = (
+        "Review this software change for concrete release risk using only the supplied evidence.\n\n"
+        "TICKET\n"
+        + view.ticket
+        + "\n\nDIFF\n"
+        + view.diff_text
+    )
+    result, usage = _run_agent(prompt_baseline_agent(), prompt, context)
+    return _finish(recorder, result.final_output, [usage], trajectory_dir)
+
+
+def run_tool_agent(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
+    """Strong comparator: one general agent with basic current-repository tools."""
+    recorder = TrajectoryRecorder(f"tool-{uuid.uuid4().hex[:12]}")
     context = ReviewContext(view, recorder)
     result, usage = _run_agent(
-        baseline_agent(),
+        tool_reviewer_agent(),
         "Review the supplied ticket and diff for release risk. Use repository tools as needed.",
         context,
     )
     return _finish(recorder, result.final_output, [usage], trajectory_dir)
 
 
-def _run_contract(context: ReviewContext):
+def run_final(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
+    """Selected architecture: one evidence-seeking agent with current + before-version tools."""
+    recorder = TrajectoryRecorder(f"final-{uuid.uuid4().hex[:12]}")
+    context = ReviewContext(view, recorder)
     result, usage = _run_agent(
-        contract_agent(),
-        "Reconstruct the change contract before evaluating release risk.",
+        proof_reviewer_agent(),
+        "Investigate this change end-to-end. Prove change-induced counterexamples and return the concise release-risk report.",
         context,
     )
+    return _finish(recorder, result.final_output, [usage], trajectory_dir)
+
+
+# Historical multi-agent experiments retained for reproducibility and changelog evidence.
+def _run_contract(context: ReviewContext):
+    result, usage = _run_agent(contract_agent(), "Reconstruct the change contract before evaluating release risk.", context)
     return result.final_output, usage
 
 
 def _run_scout(contract: ChangeContract, context: ReviewContext):
     prompt = (
-        "Investigate the repository using this change contract. Find concrete counterexamples beyond "
-        "the diff, not generic risks.\n\n"
+        "Investigate the repository using this change contract. Find concrete counterexamples beyond the diff.\n\n"
         + json.dumps(contract.model_dump(mode="json"), indent=2)
     )
     result, usage = _run_agent(impact_scout_agent(), prompt, context)
     return result.final_output, usage
 
 
-def _run_adversary(contract: ChangeContract, impact: ImpactMap, context: ReviewContext):
-    prompt = (
-        "Falsify these candidates first, then look for at most one independently testable missed "
-        "regression.\n\nCHANGE CONTRACT\n"
-        + json.dumps(contract.model_dump(mode="json"), indent=2)
-        + "\n\nIMPACT CANDIDATES\n"
-        + json.dumps(impact.model_dump(mode="json"), indent=2)
-    )
-    result, usage = _run_agent(adversary_agent(), prompt, context)
-    return result.final_output, usage
-
-
-def _run_synthesizer(candidates: object, context: ReviewContext):
-    prompt = (
-        "Turn these upstream candidates into the final review report without inventing new risks.\n\n"
-        + json.dumps(candidates.model_dump(mode="json"), indent=2)
-    )
-    result, usage = _run_agent(synthesizer_agent(), prompt, context)
-    return result.final_output, usage
-
-
-def run_impact(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
-    """Ablation: explicit contract + impact investigation + ordinary synthesis."""
-    recorder = TrajectoryRecorder(f"impact-{uuid.uuid4().hex[:12]}")
+def run_contract_experiment(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
+    recorder = TrajectoryRecorder(f"contract-{uuid.uuid4().hex[:12]}")
     context = ReviewContext(view, recorder)
     contract, contract_usage = _run_contract(context)
     impact, scout_usage = _run_scout(contract, context)
-    report, synth_usage = _run_synthesizer(impact, context)
-    return _finish(recorder, report, [contract_usage, scout_usage, synth_usage], trajectory_dir)
+    prompt = "Turn these supported candidates into a concise release-risk report.\n\n" + json.dumps(impact.model_dump(mode="json"), indent=2)
+    result, synth_usage = _run_agent(synthesizer_agent(), prompt, context)
+    return _finish(recorder, result.final_output, [contract_usage, scout_usage, synth_usage], trajectory_dir)
 
 
-def run_adversarial(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
-    """Ablation: contract + impact + adversarial stage + synthesis."""
+def run_adversarial_experiment(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
     recorder = TrajectoryRecorder(f"adversarial-{uuid.uuid4().hex[:12]}")
     context = ReviewContext(view, recorder)
     contract, contract_usage = _run_contract(context)
     impact, scout_usage = _run_scout(contract, context)
-    adversarial, adversary_usage = _run_adversary(contract, impact, context)
-    report, synth_usage = _run_synthesizer(adversarial, context)
-    return _finish(
-        recorder,
-        report,
-        [contract_usage, scout_usage, adversary_usage, synth_usage],
-        trajectory_dir,
-    )
-
-
-def run_final(view: RepositoryView, trajectory_dir: Path | None = None) -> WorkflowResult:
-    recorder = TrajectoryRecorder(f"final-{uuid.uuid4().hex[:12]}")
-    context = ReviewContext(view, recorder)
-    contract, contract_usage = _run_contract(context)
-    impact, scout_usage = _run_scout(contract, context)
-    verifier_prompt = (
-        "Independently verify the candidates against both sides of the change. Keep every distinct "
-        "change-induced counterexample; reject intended behavior and unsupported speculation.\n\n"
-        "CHANGE CONTRACT\n"
-        + json.dumps(contract.model_dump(mode="json"), indent=2)
-        + "\n\nCANDIDATES\n"
+    prompt = (
+        "Falsify these candidates first, then look for at most one independently testable missed regression.\n\n"
         + json.dumps(impact.model_dump(mode="json"), indent=2)
     )
-    verifier_result, verifier_usage = _run_agent(verifier_agent(), verifier_prompt, context)
-    return _finish(
-        recorder,
-        verifier_result.final_output,
-        [contract_usage, scout_usage, verifier_usage],
-        trajectory_dir,
-    )
+    adversarial, adversary_usage = _run_agent(adversary_agent(), prompt, context)
+    synth_prompt = "Turn these supported candidates into a concise release-risk report.\n\n" + json.dumps(adversarial.final_output.model_dump(mode="json"), indent=2)
+    result, synth_usage = _run_agent(synthesizer_agent(), synth_prompt, context)
+    return _finish(recorder, result.final_output, [contract_usage, scout_usage, adversary_usage, synth_usage], trajectory_dir)

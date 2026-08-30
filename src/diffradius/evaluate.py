@@ -12,13 +12,12 @@ from .benchmark import all_cases, benchmark_fingerprint, materialize, repository
 from .config import settings
 from .models import WorkflowResult
 from .scoring import aggregate, score_case
-from .workflow import run_adversarial, run_baseline, run_final, run_impact
+from .workflow import run_final, run_prompt_baseline, run_tool_agent
 
 
 RUNNERS: dict[str, Callable[..., WorkflowResult]] = {
-    "baseline": run_baseline,
-    "impact": run_impact,
-    "adversarial": run_adversarial,
+    "prompt": run_prompt_baseline,
+    "tool": run_tool_agent,
     "final": run_final,
 }
 
@@ -53,10 +52,10 @@ def evaluate(mode: str, output_dir: Path, case_ids: list[str] | None = None) -> 
             raise ValueError(f"Unknown benchmark case IDs: {', '.join(unknown)}")
     if not selected:
         raise ValueError("No benchmark cases selected")
+
     records: list[dict] = []
     scores = []
     runner = RUNNERS[mode]
-
     with tempfile.TemporaryDirectory(prefix="diffradius-") as tmp:
         root = Path(tmp)
         for spec in selected:
@@ -72,7 +71,7 @@ def evaluate(mode: str, output_dir: Path, case_ids: list[str] | None = None) -> 
                     "expected": [
                         {
                             "category": risk.category.value,
-                            "accepted_categories": [c.value for c in risk.accepted_categories],
+                            "accepted_categories": [category.value for category in risk.accepted_categories],
                             "paths": list(risk.paths),
                         }
                         for risk in case.expected
@@ -96,10 +95,7 @@ def evaluate(mode: str, output_dir: Path, case_ids: list[str] | None = None) -> 
         "max_turns": cfg.max_turns,
         "benchmark_fingerprint": benchmark_fingerprint(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "environment": {
-            "python": platform.python_version(),
-            "openai_agents": agents_version,
-        },
+        "environment": {"python": platform.python_version(), "openai_agents": agents_version},
         "aggregate": agg.__dict__,
         "usage": _aggregate_usage(records),
         "cases": records,
@@ -118,13 +114,11 @@ def compare_results(results: dict[str, dict]) -> dict:
     models = {results[stage].get("model") for stage in stages}
     if len(models) != 1:
         raise ValueError("Cannot compare stages run with different models")
-    case_sets = {
-        stage: [case["case_id"] for case in results[stage]["cases"]]
-        for stage in stages
-    }
+    case_sets = {stage: [case["case_id"] for case in results[stage]["cases"]] for stage in stages}
     first_case_set = case_sets[stages[0]]
     if any(case_sets[stage] != first_case_set for stage in stages[1:]):
         raise ValueError("Cannot compare stages run on different ordered case sets")
+
     summary = {
         stage: {
             "f1": results[stage]["aggregate"]["f1"],
@@ -146,8 +140,7 @@ def compare_results(results: dict[str, dict]) -> dict:
                 "from": previous,
                 "to": current,
                 "risk_recall_change": summary[current]["recall"] - summary[previous]["recall"],
-                "safe_case_accuracy_change": summary[current]["safe_case_accuracy"]
-                - summary[previous]["safe_case_accuracy"],
+                "safe_case_accuracy_change": summary[current]["safe_case_accuracy"] - summary[previous]["safe_case_accuracy"],
                 "strict_precision_change": summary[current]["precision"] - summary[previous]["precision"],
                 "f1_change": summary[current]["f1"] - summary[previous]["f1"],
             }
@@ -160,7 +153,7 @@ def compare_results(results: dict[str, dict]) -> dict:
         "stages": summary,
         "stage_deltas": deltas,
         "metric_note": (
-            "Risk recall is primary. Strict finding precision is diagnostic because regression cases "
-            "can contain valid unseeded consequences; safe-case accuracy is the hallucination control."
+            "Seeded risk recall is primary. Safe-case accuracy is the false-alarm control. "
+            "Strict precision/F1 remain diagnostic because regression cases can contain valid unseeded consequences."
         ),
     }

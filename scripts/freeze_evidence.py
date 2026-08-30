@@ -20,7 +20,7 @@ def _pct(value: float) -> str:
 
 
 def freeze(results_dir: Path, evidence_dir: Path) -> None:
-    modes = ["baseline", "impact", "adversarial", "final"]
+    modes = ["prompt", "tool", "final"]
     payloads = {mode: _load(results_dir / f"{mode}.json") for mode in modes}
     comparison = _load(results_dir / "comparison.json")
 
@@ -54,22 +54,23 @@ def freeze(results_dir: Path, evidence_dir: Path) -> None:
         shutil.copy2(results_dir / filename, evidence_dir / "results" / filename)
 
     final_cases = payloads["final"]["cases"]
-    candidates = [c for c in final_cases if c.get("hard")]
-    if not candidates:
-        candidates = final_cases
-    ordered = sorted(candidates, key=lambda c: (not c["score"]["perfect"], c["case_id"]))
+    differing = []
+    prompt_by_id = {c["case_id"]: c for c in payloads["prompt"]["cases"]}
+    for case in final_cases:
+        prompt_case = prompt_by_id[case["case_id"]]
+        if prompt_case["score"] != case["score"]:
+            differing.append(case)
+    candidates = [c for c in differing if c.get("hard")] or differing or [c for c in final_cases if c.get("hard")] or final_cases
     selected = []
-    if ordered:
-        selected.append(ordered[0])
-    imperfect = [c for c in candidates if not c["score"]["perfect"]]
-    if imperfect and imperfect[0]["case_id"] not in {c["case_id"] for c in selected}:
-        selected.append(imperfect[0])
-    elif len(ordered) > 1:
-        selected.append(ordered[1])
+    for case in candidates:
+        if case["case_id"] not in {c["case_id"] for c in selected}:
+            selected.append(case)
+        if len(selected) == 2:
+            break
 
     selected_ids = [c["case_id"] for c in selected]
     for case_id in selected_ids:
-        for mode in ["baseline", "final"]:
+        for mode in modes:
             record = next(c for c in payloads[mode]["cases"] if c["case_id"] == case_id)
             src = Path(record["trajectory_path"])
             if not src.is_absolute() and not src.exists():
@@ -90,24 +91,24 @@ def freeze(results_dir: Path, evidence_dir: Path) -> None:
         f"Model: `{model}`",
         f"Cases: **{len(first)}**",
         "",
-        "These files were copied directly from one complete evaluation matrix. They are committed only after the benchmark has been frozen and run end-to-end; no values in this folder are hand-edited.",
+        "These files were copied directly from one complete evaluation matrix. Values in this folder are not hand-edited.",
         "",
         "## Measured comparison",
         "",
-        "| Stage | F1 | Recall | Precision | Regression cases caught | Safe cases clean | Perfect cases | Tokens | Est. cost |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Stage | Risk recall | Regression cases caught | Safe cases clean | Strict precision | Strict F1 | Tokens | Est. cost |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for stage in modes:
         values = stages[stage]
         cost = "—" if values["estimated_cost_usd"] is None else f"${values['estimated_cost_usd']:.4f}"
         lines.append(
-            f"| {stage} | {values['f1']:.3f} | {values['recall']:.3f} | {values['precision']:.3f} | "
-            f"{_pct(values['regression_case_detection_rate'])} | {_pct(values['safe_case_accuracy'])} | "
-            f"{_pct(values['perfect_case_rate'])} | {values['total_tokens']:,} | {cost} |"
+            f"| {stage} | {values['recall']:.3f} | {_pct(values['regression_case_detection_rate'])} | "
+            f"{_pct(values['safe_case_accuracy'])} | {values['precision']:.3f} | {values['f1']:.3f} | "
+            f"{values['total_tokens']:,} | {cost} |"
         )
     lines.extend(["", "## Representative trajectories", ""])
     for case_id in selected_ids:
-        lines.append(f"- `{case_id}` — baseline and final JSON + Markdown traces are in `trajectories/`.")
+        lines.append(f"- `{case_id}` — prompt, tool-agent and final JSON + Markdown traces are in `trajectories/`.")
     lines.extend([
         "",
         "The Markdown traces expose prompts, tool calls, bounded tool responses and structured outputs. They deliberately do **not** expose private model chain-of-thought.",

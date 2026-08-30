@@ -8,8 +8,8 @@ from .benchmark import all_cases
 from .evaluate import RUNNERS, compare_results, evaluate
 from .render import render_comparison, render_review
 from .repository import RepositoryView, git_diff
-from .workflow import run_final
 from .trajectory_render import render_trajectory_file
+from .workflow import run_final
 
 
 def _review(args: argparse.Namespace) -> int:
@@ -32,7 +32,7 @@ def _eval(args: argparse.Namespace) -> int:
     out = Path(args.output)
     case_ids = [case.strip() for case in args.cases.split(",") if case.strip()] if args.cases else None
     if args.mode in {"all", "both"}:
-        modes = list(RUNNERS) if args.mode == "all" else ["baseline", "final"]
+        modes = list(RUNNERS) if args.mode == "all" else ["prompt", "final"]
         results = {mode: evaluate(mode, out, case_ids) for mode in modes}
         comparison = compare_results(results)
         (out / "comparison.json").write_text(json.dumps(comparison, indent=2), encoding="utf-8")
@@ -82,7 +82,7 @@ def main() -> int:
         "--mode",
         choices=[*RUNNERS.keys(), "both", "all"],
         default="all",
-        help="Use 'all' for the experiment/ablation matrix; 'both' compares only baseline and final.",
+        help="Use 'all' for prompt baseline, strong tool comparator and selected final architecture.",
     )
     ev.add_argument("--cases", help="Comma-separated case IDs")
     ev.add_argument("--output", default="results/benchmark")
