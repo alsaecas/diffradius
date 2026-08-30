@@ -16,7 +16,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -e '.[dev]'
       - run: python -m compileall -q src benchmarks scripts tests
-      - run: pytest
+      - run: python -m pytest
       - run: python scripts/validate_benchmark.py
       - uses: actions/setup-node@v4
         with:
