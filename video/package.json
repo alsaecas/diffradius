@@ -1,0 +1,25 @@
+{
+  "name": "diffradius-hackathon-video",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-evidence.mjs",
+    "audio": "node scripts/generate-audio.mjs",
+    "captions": "node scripts/generate-srt.mjs",
+    "render": "npm run sync && npm run captions && npm run audio && remotion render src/index.ts DiffRadiusFinal out/diffradius-hackathon-final.mp4 --codec=h264 --crf=16 --pixel-format=yuv420p --audio-codec=aac",
+    "still": "remotion still src/index.ts DiffRadiusFinal"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.518",
+    "@remotion/media": "4.0.518",
+    "remotion": "4.0.518",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}
