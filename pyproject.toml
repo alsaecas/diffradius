@@ -27,3 +27,4 @@ packages = ["src/diffradius"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+pythonpath = ["."]
